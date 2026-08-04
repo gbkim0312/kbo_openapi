@@ -10,7 +10,7 @@ KBO 경기 일정·결과를 수집해 PostgreSQL에 보존하고 REST/OpenAPI�
 - PostgreSQL 테이블 모델/초기 마이그레이션 및 public 조회 API
 - `/health/live`, `/health/ready`, `/api/v1/teams`, `/api/v1/games`, `/api/v1/games/{id}`, `/api/v1/results/latest`
 
-KBO의 실제 내부 XHR과 kbocli의 안정적인 JSON 명령 형식은 버전/시점에 따라 확인이 필요합니다. 따라서 확인되지 않은 endpoint·CLI 인자를 코드에 고정하지 않았습니다. `KBO_SCHEDULE_URL`과 전용 parser를 확인한 뒤 `KboHttpSource`에 주입하는 것이 다음 작업입니다.
+KBO 기본 수집기는 공식 일정 페이지가 호출하는 `POST /ws/Schedule.asmx/GetScheduleList`를 사용합니다. 이 호출은 세션 쿠키와 `Referer`, XHR 헤더를 요구하며, JSON의 행별 HTML 조각을 `KboScheduleParser`가 정규화합니다. 응답 구조가 바뀌면 parser contract test가 실패하도록 구성했습니다.
 
 ## 실행
 

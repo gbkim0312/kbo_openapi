@@ -1,6 +1,16 @@
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -13,8 +23,22 @@ class GameModel(TimestampMixin, Base):
         CheckConstraint("home_score IS NULL OR home_score >= 0", name="home_score_nonnegative"),
         CheckConstraint("away_team_id != home_team_id", name="different_teams"),
         CheckConstraint("revision >= 1", name="revision_positive"),
-        Index("uq_games_source_game_id", "source", "source_game_id", unique=True, postgresql_where="source_game_id IS NOT NULL"),
-        Index("ix_games_natural", "season", "league_type", "game_date", "away_team_id", "home_team_id", "scheduled_at"),
+        Index(
+            "uq_games_source_game_id",
+            "source",
+            "source_game_id",
+            unique=True,
+            postgresql_where=text("source_game_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_games_natural",
+            "season",
+            "league_type",
+            "game_date",
+            "away_team_id",
+            "home_team_id",
+            "scheduled_at",
+        ),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     source: Mapped[str] = mapped_column(String(30))

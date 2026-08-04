@@ -1,14 +1,29 @@
 from datetime import date
 
-from app.adapters.outbound.sources.exceptions import SourceNoGames, SourceSchemaChangedError, SourceTransportError
+from app.adapters.outbound.sources.exceptions import (
+    SourceNoGames,
+    SourceSchemaChangedError,
+    SourceTransportError,
+)
 from app.application.dto.source_game import SourceGame
 from app.application.ports.outbound.game_source import GameSource
 from app.domain.exceptions import SourceUnavailableError
 
 
 class CompositeKboSource(GameSource):
-    def __init__(self, http: GameSource, cli: GameSource | None = None, playwright: GameSource | None = None, fallback_on_schema_error: bool = True) -> None:
-        self.http, self.cli, self.playwright, self.fallback_on_schema_error = http, cli, playwright, fallback_on_schema_error
+    def __init__(
+        self,
+        http: GameSource,
+        cli: GameSource | None = None,
+        playwright: GameSource | None = None,
+        fallback_on_schema_error: bool = True,
+    ) -> None:
+        self.http, self.cli, self.playwright, self.fallback_on_schema_error = (
+            http,
+            cli,
+            playwright,
+            fallback_on_schema_error,
+        )
 
     async def fetch_games(self, target_date: date) -> list[SourceGame]:
         try:
@@ -17,7 +32,7 @@ class CompositeKboSource(GameSource):
             return []
         except SourceSchemaChangedError:
             if not self.fallback_on_schema_error:
-                raise SourceUnavailableError()
+                raise SourceUnavailableError() from None
         except SourceTransportError:
             pass
         if self.cli:
