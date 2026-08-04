@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: kbo
+      POSTGRES_USER: kbo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kbo -d kbo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  kbo-api:
+    build: .
+    image: kbo-result-api:local
+    env_file: .env
+    command: ["api"]
+    ports: ["8085:8000"]
+    depends_on: {postgres: {condition: service_healthy}}
+  kbo-worker:
+    image: kbo-result-api:local
+    build: .
+    env_file: .env
+    command: ["worker"]
+    depends_on: {postgres: {condition: service_healthy}}
