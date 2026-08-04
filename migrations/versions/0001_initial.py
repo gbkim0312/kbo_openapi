@@ -9,11 +9,19 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.adapters.outbound.persistence.models.base import Base
+from app.adapters.outbound.persistence.models.collection_job import CollectionJobModel
+from app.adapters.outbound.persistence.models.game import GameModel
+from app.adapters.outbound.persistence.models.game_revision import GameRevisionModel
+from app.adapters.outbound.persistence.models.raw_snapshot import RawSnapshotModel
+from app.adapters.outbound.persistence.models.team import TeamModel
 
 revision = "0001_initial"
 down_revision = None
 branch_labels = None
 depends_on = None
+
+# Importing the model classes registers their tables on Base.metadata before DDL runs.
+MODELS = (TeamModel, GameModel, GameRevisionModel, RawSnapshotModel, CollectionJobModel)
 
 
 def upgrade() -> None:
