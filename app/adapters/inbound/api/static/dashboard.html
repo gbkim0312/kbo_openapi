@@ -39,7 +39,7 @@
       { name: '팀 목록', method: 'GET', path: '/api/v1/teams' },
       { name: '경기 목록', method: 'GET', path: '/api/v1/games', fields: [['date', 'date', today], ['team', 'text', ''], ['limit', 'number', '20']] },
       { name: '단일 경기', method: 'GET', path: '/api/v1/games/{gameId}', fields: [['gameId', 'number', '1']] },
-      { name: '최신 종료 경기', method: 'GET', path: '/api/v1/results/latest', fields: [['team', 'text', ''], ['limit', 'number', '10']] },
+      { name: '최신 종료 경기', method: 'GET', path: '/api/v1/results/latest', fields: [['date', 'date', ''], ['team', 'text', ''], ['limit', 'number', '10']] },
       { name: '팀 순위', method: 'GET', path: '/api/v1/rankings', fields: [['date', 'date', '']] },
       { name: '선수 시즌 기록', method: 'GET', path: '/api/v1/player-stats', fields: [['season', 'number', String(new Date().getFullYear())], ['role', 'select', 'hitter', ['hitter', 'pitcher']], ['team', 'text', ''], ['limit', 'number', '20']] },
       { name: '공식 시즌 MVP', method: 'GET', path: '/api/v1/awards', fields: [['season', 'number', String(new Date().getFullYear())]] },

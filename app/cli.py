@@ -51,12 +51,18 @@ async def collect_records() -> None:
 
 async def run_worker() -> None:
     from app.adapters.inbound.scheduler.collection_scheduler import create_scheduler
-    from app.bootstrap.create_worker import create_collect_use_case, create_record_use_case
+    from app.bootstrap.create_worker import (
+        create_collect_use_case,
+        create_live_game_use_case,
+        create_record_use_case,
+    )
     from app.infrastructure.config import settings
 
     if not settings.scheduler_enabled:
         await asyncio.Event().wait()
-    scheduler = create_scheduler(create_collect_use_case(), create_record_use_case())
+    scheduler = create_scheduler(
+        create_collect_use_case(), create_record_use_case(), create_live_game_use_case()
+    )
     scheduler.start()
     try:
         await asyncio.Event().wait()

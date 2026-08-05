@@ -107,7 +107,7 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 공개 | `GET` | `/api/v1/teams` | 없음 | 등록된 KBO 팀 목록 |
 | 공개 | `GET` | `/api/v1/games` | `date` 또는 `from`·`to`, `team`, `status`, `leagueType`, `limit`, `cursor` | 경기 목록. 기간은 최대 31일이며 `date`와 기간 조건은 함께 사용할 수 없음 |
 | 공개 | `GET` | `/api/v1/games/{gameId}` | 내부 경기 ID | 단일 경기 |
-| 공개 | `GET` | `/api/v1/results/latest` | `team`, `limit` | 최신 종료 경기 |
+| 공개 | `GET` | `/api/v1/results/latest` | `date`, `team`, `limit` | 최신 종료 경기. `date`로 특정 날짜의 종료 경기만 조회 가능 |
 | 공개 | `GET` | `/api/v1/rankings` | `date`(선택) | 팀 순위, 승차, 최근 10경기, 연승·연패 |
 | 공개 | `GET` | `/api/v1/player-stats` | `season`(필수), `role`, `team`, `limit` | 시즌 타자·투수 기록. `role`: `hitter` 또는 `pitcher` |
 | 공개 | `GET` | `/api/v1/awards` | `season`(선택) | KBO 공식 시즌 MVP |
@@ -131,6 +131,9 @@ curl 'http://localhost:8085/api/v1/games?date=2026-08-05&team=SS&limit=20'
 # 팀 순위 및 2026년 투수 기록
 curl http://localhost:8085/api/v1/rankings
 curl 'http://localhost:8085/api/v1/player-stats?season=2026&role=pitcher&limit=20'
+
+# 2026-08-04 종료 경기만 조회
+curl 'http://localhost:8085/api/v1/results/latest?date=2026-08-04'
 
 # 날짜별 경기 수집
 curl -X POST http://localhost:8085/internal/v1/collections \
@@ -174,12 +177,12 @@ docker compose run --rm kbo-worker backfill 2026-08-01 2026-08-05
 docker compose run --rm kbo-worker collect-records
 ```
 
-정기 worker는 다음 시간(Asia/Seoul)에 동작합니다.
+`SCHEDULER_ENABLED=true`인 정기 worker는 다음 시간(Asia/Seoul)에 동작합니다.
 
-- 매일 00:10: 전날 경기 재수집
+- 매일 00:30: 전날 경기·팀 순위·선수 기록·MVP·종료 경기 상세 기록 전체 수집
 - 매일 06:00, 12:00: 당일 경기 수집
-- 매일 00:30: 팀 순위·선수 시즌 기록·공식 MVP 수집
-- 17:00~23:59: 5분마다 당일 경기 재수집
+- 16:00~23:59: 15분마다 미확정 경기의 라인업·공식 프리뷰 분석 수집. 확정 라인업을 받으면 해당 경기의 프리뷰 재수집을 중단
+- 17:00~23:59: 5분마다 당일 경기 상태·점수 수집 및 진행 중 경기의 투수 상세 기록 갱신
 
 정기 수집을 끄려면 `.env`에서 `SCHEDULER_ENABLED=false`로 변경한 뒤 worker를 재시작합니다.
 

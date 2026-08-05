@@ -108,7 +108,10 @@ async def get_game(game_id: int, request: Request) -> dict:
 
 @router.get("/results/latest")
 async def latest_results(
-    request: Request, team: str | None = None, limit: int = Query(10, ge=1, le=200)
+    request: Request,
+    date_: Annotated[date | None, Query(alias="date")] = None,
+    team: str | None = None,
+    limit: int = Query(10, ge=1, le=200),
 ) -> dict:
     stmt = (
         select(GameModel)
@@ -121,6 +124,8 @@ async def latest_results(
         stmt = stmt.where(
             or_(GameModel.away_team.has(code=team), GameModel.home_team.has(code=team))
         )
+    if date_:
+        stmt = stmt.where(GameModel.game_date == date_)
     async with request.app.state.session_factory() as session:
         games = (await session.scalars(stmt)).all()
     return {"games": [output(game).model_dump(by_alias=True) for game in games]}
