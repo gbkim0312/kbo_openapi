@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KBO API 관리 대시보드</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101522; color: #e9edf5; }
+    body { margin: 0; padding: 24px; } main { max-width: 1280px; margin: auto; }
+    h1 { margin: 0; } .subtitle { color: #aeb9ce; } .notice { border-left: 4px solid #eab308; padding: 10px 12px; background: #252114; }
+    .toolbar, .card-head, .fields { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .toolbar { margin: 20px 0; } .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 14px; }
+    .card { background: #192234; border: 1px solid #2c3b57; border-radius: 10px; padding: 14px; }
+    .card h2 { font-size: 16px; margin: 0; } .method { font: 700 12px ui-monospace, monospace; color: #7dd3fc; }
+    code { color: #c4b5fd; overflow-wrap: anywhere; } label { font-size: 13px; color: #b9c5db; }
+    input, select { background: #0e1625; color: #eef2ff; border: 1px solid #3a4c6b; border-radius: 6px; padding: 7px; }
+    button { cursor: pointer; color: #07131f; background: #67e8f9; border: 0; border-radius: 6px; padding: 8px 11px; font-weight: 700; }
+    button:disabled { opacity: .55; cursor: wait; } pre { margin: 12px 0 0; background: #0a0f19; border-radius: 6px; padding: 10px; min-height: 38px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+    .status { font-size: 12px; margin-left: auto; } .ok { color: #86efac; } .error { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>KBO API 관리 대시보드</h1>
+    <p class="subtitle">각 API를 현재 서버에서 직접 호출하고 JSON 응답을 확인합니다.</p>
+    <p class="notice">관리 API는 아래 입력란의 키를 요청 시에만 사용하며 브라우저 저장소에 보관하지 않습니다. 대시보드는 개인망 또는 역방향 프록시 인증 뒤에 두는 것을 권장합니다.</p>
+    <div class="toolbar">
+      <label>관리 API 키 <input id="api-key" type="password" autocomplete="off" placeholder="ADMIN_API_KEY"></label>
+      <button id="clear-key" type="button">키 지우기</button>
+      <a href="/docs"><button type="button">Swagger UI</button></a>
+    </div>
+    <section id="api-grid" class="grid" aria-label="API 테스트"></section>
+  </main>
+  <script>
+    const today = new Date().toISOString().slice(0, 10);
+    const endpoints = [
+      { name: '생존 상태', method: 'GET', path: '/health/live' },
+      { name: 'DB 준비 상태', method: 'GET', path: '/health/ready' },
+      { name: '팀 목록', method: 'GET', path: '/api/v1/teams' },
+      { name: '경기 목록', method: 'GET', path: '/api/v1/games', fields: [['date', 'date', today], ['team', 'text', ''], ['limit', 'number', '20']] },
+      { name: '단일 경기', method: 'GET', path: '/api/v1/games/{gameId}', fields: [['gameId', 'number', '1']] },
+      { name: '최신 종료 경기', method: 'GET', path: '/api/v1/results/latest', fields: [['team', 'text', ''], ['limit', 'number', '10']] },
+      { name: '팀 순위', method: 'GET', path: '/api/v1/rankings', fields: [['date', 'date', '']] },
+      { name: '선수 시즌 기록', method: 'GET', path: '/api/v1/player-stats', fields: [['season', 'number', String(new Date().getFullYear())], ['role', 'select', 'hitter', ['hitter', 'pitcher']], ['team', 'text', ''], ['limit', 'number', '20']] },
+      { name: '공식 시즌 MVP', method: 'GET', path: '/api/v1/awards', fields: [['season', 'number', String(new Date().getFullYear())]] },
+      { name: '경기 상세 기록', method: 'GET', path: '/api/v1/games/{gameId}/details', fields: [['gameId', 'number', '1']] },
+      { name: '경기 라인업', method: 'GET', path: '/api/v1/games/{gameId}/lineups', fields: [['gameId', 'number', '1']] },
+      { name: '경기 공식 분석', method: 'GET', path: '/api/v1/games/{gameId}/analysis', fields: [['gameId', 'number', '1']] },
+      { name: '날짜별 경기 수집', method: 'POST', path: '/internal/v1/collections', admin: true, fields: [['targetDate', 'date', today], ['force', 'checkbox', '']], body: values => ({ targetDate: values.targetDate, force: values.force }) },
+      { name: '순위·선수 기록·MVP 수집', method: 'POST', path: '/internal/v1/records/collect', admin: true },
+      { name: '경기 상세 기록 수집', method: 'POST', path: '/internal/v1/games/{gameId}/details/collect', admin: true, fields: [['gameId', 'number', '1']] },
+      { name: '라인업·공식 분석 수집', method: 'POST', path: '/internal/v1/games/{gameId}/preview/collect', admin: true, fields: [['gameId', 'number', '1']] },
+    ];
+
+    const grid = document.querySelector('#api-grid');
+    const escapeHtml = value => String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
+    const inputFor = ([name, type, value, choices]) => type === 'select'
+      ? `<label>${escapeHtml(name)} <select name="${escapeHtml(name)}">${choices.map(choice => `<option value="${escapeHtml(choice)}" ${choice === value ? 'selected' : ''}>${escapeHtml(choice)}</option>`).join('')}</select></label>`
+      : type === 'checkbox'
+        ? `<label>${escapeHtml(name)} <input name="${escapeHtml(name)}" type="checkbox"></label>`
+        : `<label>${escapeHtml(name)} <input name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value)}"></label>`;
+
+    for (const endpoint of endpoints) {
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.innerHTML = `<div class="card-head"><h2>${escapeHtml(endpoint.name)}</h2><span class="method">${endpoint.method}</span></div><p><code>${escapeHtml(endpoint.path)}</code></p><div class="fields">${(endpoint.fields || []).map(inputFor).join('')}</div><p><button type="button">API 호출</button><span class="status"></span></p><pre>아직 호출하지 않았습니다.</pre>`;
+      card.querySelector('button').addEventListener('click', () => callApi(endpoint, card));
+      grid.append(card);
+    }
+
+    async function callApi(endpoint, card) {
+      const button = card.querySelector('button');
+      const status = card.querySelector('.status');
+      const output = card.querySelector('pre');
+      const values = Object.fromEntries((endpoint.fields || []).map(([name, type]) => {
+        const input = card.querySelector(`[name="${name}"]`);
+        return [name, type === 'checkbox' ? input.checked : input.value];
+      }));
+      let path = endpoint.path.replace(/\{(\w+)\}/g, (_, key) => encodeURIComponent(values[key] || ''));
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(values)) if (!endpoint.path.includes(`{${key}}`) && value !== '') query.set(key, value);
+      if (endpoint.method === 'GET' && query.size) path += `?${query}`;
+      const options = { method: endpoint.method, headers: { Accept: 'application/json' } };
+      if (endpoint.admin) {
+        const key = document.querySelector('#api-key').value;
+        if (!key) { status.className = 'status error'; status.textContent = '관리 API 키를 입력하세요.'; return; }
+        options.headers.Authorization = `Bearer ${key}`;
+      }
+      if (endpoint.body) { options.headers['Content-Type'] = 'application/json'; options.body = JSON.stringify(endpoint.body(values)); }
+      button.disabled = true; status.className = 'status'; status.textContent = '호출 중…';
+      try {
+        const response = await fetch(path, options);
+        const text = await response.text();
+        try { output.textContent = JSON.stringify(JSON.parse(text), null, 2); } catch { output.textContent = text; }
+        status.className = `status ${response.ok ? 'ok' : 'error'}`;
+        status.textContent = `${response.status} ${response.statusText}`;
+      } catch (error) {
+        output.textContent = String(error);
+        status.className = 'status error'; status.textContent = '네트워크 오류';
+      } finally { button.disabled = false; }
+    }
+    document.querySelector('#clear-key').addEventListener('click', () => { document.querySelector('#api-key').value = ''; });
+  </script>
+</body>
+</html>

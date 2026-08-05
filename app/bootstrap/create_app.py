@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 
+from app.adapters.inbound.api.dashboard import router as dashboard_router
 from app.adapters.inbound.api.exception_handlers import (
     domain_error_handler,
     validation_error_handler,
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(records_router)
     app.include_router(teams_router)
     app.include_router(collections_router)
+    app.include_router(dashboard_router)
     app.add_exception_handler(DomainError, domain_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     return app

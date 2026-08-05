@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: kbo
+      POSTGRES_USER: kbo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in OMV's .env file}
+      TZ: Asia/Seoul
+    volumes:
+      - ${KBO_POSTGRES_DATA_DIR:?set KBO_POSTGRES_DATA_DIR in OMV's .env file}:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kbo -d kbo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kbo-migrate:
+    build:
+      context: .
+    image: kbo-result-api:omv
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://kbo:${POSTGRES_PASSWORD}@postgres:5432/kbo
+      TZ: Asia/Seoul
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  kbo-api:
+    build:
+      context: .
+    image: kbo-result-api:omv
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://kbo:${POSTGRES_PASSWORD}@postgres:5432/kbo
+      TZ: Asia/Seoul
+    command: ["api"]
+    ports:
+      - "${KBO_API_PORT:-8085}:8000"
+    depends_on:
+      kbo-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  kbo-worker:
+    build:
+      context: .
+    image: kbo-result-api:omv
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://kbo:${POSTGRES_PASSWORD}@postgres:5432/kbo
+      TZ: Asia/Seoul
+    command: ["worker"]
+    depends_on:
+      kbo-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped

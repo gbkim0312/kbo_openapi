@@ -103,6 +103,7 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | --- | --- | --- | --- | --- |
 | 상태 | `GET` | `/health/live` | 없음 | API 프로세스 상태 |
 | 상태 | `GET` | `/health/ready` | 없음 | PostgreSQL 연결 상태 |
+| 관리 화면 | `GET` | `/admin` | 없음 | 브라우저 기반 API 상태·호출 대시보드 |
 | 공개 | `GET` | `/api/v1/teams` | 없음 | 등록된 KBO 팀 목록 |
 | 공개 | `GET` | `/api/v1/games` | `date` 또는 `from`·`to`, `team`, `status`, `leagueType`, `limit`, `cursor` | 경기 목록. 기간은 최대 31일이며 `date`와 기간 조건은 함께 사용할 수 없음 |
 | 공개 | `GET` | `/api/v1/games/{gameId}` | 내부 경기 ID | 단일 경기 |
@@ -144,6 +145,12 @@ curl http://localhost:8085/api/v1/games/2/analysis
 ```
 
 `gameId`는 `sourceGameId`가 아니라 `/api/v1/games` 응답의 숫자 `id`입니다. `lineups.confirmed`가 `true`면 KBO가 확정 라인업으로 표시한 데이터이고, `false`면 확정 전 최근 라인업입니다. `analysis.officialAnalysis`는 KBO 공식 분석 원문 구조이며 자체 승률 예측 모델은 아닙니다.
+
+## 관리 대시보드
+
+`http://서버-IP:8085/admin`에서 API 대시보드를 엽니다. 모든 공개 조회 API와 모든 내부 수집 API에 대해 입력값을 넣고 **API 호출** 버튼으로 응답 JSON을 바로 확인할 수 있습니다. 내부 수집 API를 호출할 때만 화면 상단에 `ADMIN_API_KEY`를 입력합니다. 이 키는 브라우저 저장소에 보관하지 않으며, 해당 요청의 `Authorization` 헤더로만 전송됩니다.
+
+대시보드 자체에는 로그인 기능이 없으므로 인터넷에 직접 공개하지 마세요. OMV 개인 서버에서는 내부망에서만 사용하거나, 외부 접근이 필요하면 역방향 프록시의 인증과 HTTPS를 앞단에 설정하세요.
 
 ## 수동 수집과 backfill
 
@@ -217,6 +224,30 @@ uv run python -m app.cli api
 ```sh
 uv run python -m app.cli worker
 ```
+
+## OMV Compose GUI로 서버 배포
+
+`compose.omv.yml`은 OMV의 Compose 플러그인에서 관리하기 위한 서버용 파일입니다. API와 worker 이미지는 서버의 Docker가 현재 프로젝트 폴더에서 직접 빌드하고, Compose 파일과 `.env`는 OMV GUI에서 편집할 수 있습니다. PostgreSQL 데이터는 Docker named volume이 아닌 OMV 공유 폴더에 보관합니다.
+
+1. OMV에서 공유 폴더(예: `appdata/kbo-openapi`)를 만들고, 서버의 절대 경로를 확인합니다.
+2. 해당 폴더에 이 저장소를 내려받습니다. Compose 파일의 `build.context: .` 때문에 `Dockerfile`, `app/`, `migrations/`가 같은 프로젝트 폴더에 있어야 합니다.
+3. OMV Compose GUI에서 프로젝트를 만들고, Compose 파일 내용으로 [compose.omv.yml](compose.omv.yml)을 붙여 넣습니다. GUI의 작업 디렉터리는 저장소 최상위 폴더로 지정합니다.
+4. 같은 GUI 프로젝트의 `.env`에 [`.env.example`](.env.example)을 복사한 뒤 아래 값만 반드시 실제 값으로 교체합니다.
+
+```dotenv
+POSTGRES_PASSWORD=긴-DB-비밀번호
+ADMIN_API_KEY=긴-관리-API-키
+KBO_POSTGRES_DATA_DIR=/srv/dev-disk-by-uuid-xxxx/appdata/kbo-openapi/postgres
+KBO_API_PORT=8085
+SCHEDULER_ENABLED=true
+```
+
+`KBO_POSTGRES_DATA_DIR`는 반드시 빈 전용 폴더 또는 이 서비스가 이미 사용 중인 PostgreSQL 데이터 폴더여야 합니다. OMV의 파일 관리자에서 이 폴더를 먼저 만들고, Docker가 쓸 수 있는 권한을 부여하세요. 데이터 초기화가 필요할 때는 컨테이너가 중지된 상태에서 이 폴더의 내용을 삭제해야 하므로 주의하세요.
+
+5. OMV GUI에서 **Build** 후 **Up**을 실행합니다. `kbo-migrate`가 먼저 DB 마이그레이션을 적용한 후 종료되고, 성공해야 `kbo-api`와 `kbo-worker`가 시작됩니다. `kbo-migrate`의 종료 상태 `0`은 정상입니다.
+6. `http://서버-IP:8085/health/ready` 또는 OMV 로그에서 준비 상태를 확인합니다. 외부 공개가 필요 없으면 공유기 포트포워딩을 만들지 말고, 필요하면 역방향 프록시와 HTTPS를 별도로 설정하세요.
+
+서버에서 Git으로 업데이트한 뒤에는 OMV GUI에서 **Pull**(또는 터미널의 `git pull`) → **Build** → **Up** 순으로 실행하면 됩니다. 새 DB 마이그레이션도 `kbo-migrate`가 자동 적용합니다.
 
 ## 개발 및 검증
 
