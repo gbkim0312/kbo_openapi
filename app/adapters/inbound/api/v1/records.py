@@ -179,10 +179,12 @@ async def lineups(game_id: int, request: Request) -> dict:
                 .order_by(GameLineupEntryModel.team_id, GameLineupEntryModel.batting_order)
             )
         ).all()
+        analysis_model = await session.get(GamePreviewAnalysisModel, game_id)
     return {
         "gameId": game_id,
         "confirmed": snapshot.confirmed,
         "collectedAt": snapshot.collected_at,
+        "startingPitchers": analysis_model.data.get("startingPitchers") if analysis_model else None,
         "lineups": [
             {
                 "team": team.code,

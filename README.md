@@ -112,7 +112,7 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 공개 | `GET` | `/api/v1/player-stats` | `season`(필수), `role`, `team`, `limit` | 시즌 타자·투수 기록. `role`: `hitter` 또는 `pitcher` |
 | 공개 | `GET` | `/api/v1/awards` | `season`(선택) | KBO 공식 시즌 MVP |
 | 공개 | `GET` | `/api/v1/games/{gameId}/details` | 내부 경기 ID | 결승타와 투수별 경기 기록 |
-| 공개 | `GET` | `/api/v1/games/{gameId}/lineups` | 내부 경기 ID | 최신 수집 라인업, 타순·포지션·WAR·확정 여부 |
+| 공개 | `GET` | `/api/v1/games/{gameId}/lineups` | 내부 경기 ID | 최신 수집 라인업, 선발투수, 타순·포지션·WAR·확정 여부 |
 | 공개 | `GET` | `/api/v1/games/{gameId}/analysis` | 내부 경기 ID | KBO 게임센터의 팀 비교·핵심선수 프리뷰 분석 |
 | 내부 | `POST` | `/internal/v1/collections/all` | `{"targetDate":"YYYY-MM-DD"}` | 날짜별 경기, 시즌 순위·선수 기록·MVP, 종료 경기 상세 기록을 순차 수집 |
 | 내부 | `POST` | `/internal/v1/collections` | `{"targetDate":"YYYY-MM-DD","force":false}` | 날짜별 경기 일정·결과 수집 |
@@ -154,7 +154,7 @@ curl http://localhost:8085/api/v1/games/2/lineups
 curl http://localhost:8085/api/v1/games/2/analysis
 ```
 
-`gameId`는 `sourceGameId`가 아니라 `/api/v1/games` 응답의 숫자 `id`입니다. `lineups.confirmed`가 `true`면 KBO가 확정 라인업으로 표시한 데이터이고, `false`면 확정 전 최근 라인업입니다. `analysis.officialAnalysis`는 KBO 공식 분석 원문 구조이며 자체 승률 예측 모델은 아닙니다.
+`gameId`는 `sourceGameId`가 아니라 `/api/v1/games` 응답의 숫자 `id`입니다. `lineups.confirmed`가 `true`면 KBO가 확정 라인업으로 표시한 데이터이고, `false`면 확정 전 최근 라인업입니다. `lineups.startingPitchers`에는 KBO가 제공한 원정·홈 선발투수 이름과 선수 ID가 포함됩니다. `analysis.officialAnalysis`에는 선발투수의 공식 전력 비교 원문도 포함되며, 자체 승률 예측 모델은 아닙니다.
 
 ## 관리 대시보드
 

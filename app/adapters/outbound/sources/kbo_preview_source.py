@@ -41,6 +41,16 @@ class KboPreviewSource:
         ) as client:
             await client.get(referer)
             params = {"leId": "1", "srId": "0", "seasonId": str(season), "gameId": source_game_id}
+            game_list = await self._post(
+                client,
+                "/ws/Main.asmx/GetKboGameList",
+                {
+                    "leId": "1",
+                    "srId": "0,1,3,4,5,6,7,8,9",
+                    "date": game_date,
+                },
+                referer,
+            )
             lineup = await self._post(
                 client, "/ws/Schedule.asmx/GetLineUpAnalysis", params, referer
             )
@@ -59,6 +69,9 @@ class KboPreviewSource:
                 },
                 referer,
             )
+            starters, starter_analysis = await self._fetch_starting_pitchers(
+                client, game_list, source_game_id, params, away_code, home_code, referer
+            )
         confirmed = bool(lineup[0][0].get("LINEUP_CK"))
         home_war = lineup[1][0] if len(lineup) > 1 and lineup[1] else {}
         away_war = lineup[2][0] if len(lineup) > 2 and lineup[2] else {}
@@ -73,8 +86,54 @@ class KboPreviewSource:
                 "lineupWar": {"away": away_war, "home": home_war},
                 "teamRecord": team_record,
                 "keyPlayers": key_players,
+                "startingPitchers": starters,
+                "startingPitcherAnalysis": starter_analysis,
             },
         )
+
+    async def _fetch_starting_pitchers(
+        self,
+        client: httpx.AsyncClient,
+        game_list: object,
+        source_game_id: str,
+        params: dict[str, str],
+        away_code: str,
+        home_code: str,
+        referer: str,
+    ) -> tuple[dict[str, object] | None, object | None]:
+        games = game_list.get("game", []) if isinstance(game_list, dict) else []
+        game = next(
+            (row for row in games if isinstance(row, dict) and row.get("G_ID") == source_game_id),
+            None,
+        )
+        if game is None or not game.get("T_PIT_P_ID") or not game.get("B_PIT_P_ID"):
+            return None, None
+        starters: dict[str, object] = {
+            "away": {
+                "team": away_code,
+                "playerId": game["T_PIT_P_ID"],
+                "name": str(game["T_PIT_P_NM"]).strip(),
+            },
+            "home": {
+                "team": home_code,
+                "playerId": game["B_PIT_P_ID"],
+                "name": str(game["B_PIT_P_NM"]).strip(),
+            },
+        }
+        analysis = await self._post(
+            client,
+            "/ws/Schedule.asmx/GetPitcherRecordAnalysis",
+            {
+                **params,
+                "awayTeamId": away_code,
+                "awayPitId": str(game["T_PIT_P_ID"]),
+                "homeTeamId": home_code,
+                "homePitId": str(game["B_PIT_P_ID"]),
+                "groupSc": "SEASON",
+            },
+            referer,
+        )
+        return starters, analysis
 
     def _entries(self, table_json: str | dict | list, team_code: str) -> list[LineupEntry]:
         if isinstance(table_json, list):
