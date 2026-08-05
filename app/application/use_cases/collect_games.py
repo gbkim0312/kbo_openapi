@@ -71,6 +71,7 @@ class CollectGamesUseCase:
                         session.add(self._revision(game, source_game, now, {}))
                         job.inserted_count += 1
                     elif existing.canonical_hash == new_hash:
+                        self._enrich_source_identity(existing, source_game)
                         existing.last_collected_at = now
                         existing.updated_at = now
                         job.unchanged_count += 1
@@ -175,6 +176,14 @@ class CollectGamesUseCase:
             now,
             now,
         )
+
+    @staticmethod
+    def _enrich_source_identity(game, dto) -> None:
+        """Backfill a game-center link that KBO did not expose on an earlier collection."""
+        if game.source_game_id is None and dto.source_game_id:
+            game.source_game_id = dto.source_game_id
+        if game.source_url is None and dto.source_url:
+            game.source_url = dto.source_url
 
     def _source_view(self, game):
         return {
