@@ -114,6 +114,7 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 공개 | `GET` | `/api/v1/games/{gameId}/details` | 내부 경기 ID | 결승타와 투수별 경기 기록 |
 | 공개 | `GET` | `/api/v1/games/{gameId}/lineups` | 내부 경기 ID | 최신 수집 라인업, 타순·포지션·WAR·확정 여부 |
 | 공개 | `GET` | `/api/v1/games/{gameId}/analysis` | 내부 경기 ID | KBO 게임센터의 팀 비교·핵심선수 프리뷰 분석 |
+| 내부 | `POST` | `/internal/v1/collections/all` | `{"targetDate":"YYYY-MM-DD"}` | 날짜별 경기, 시즌 순위·선수 기록·MVP, 종료 경기 상세 기록을 순차 수집 |
 | 내부 | `POST` | `/internal/v1/collections` | `{"targetDate":"YYYY-MM-DD","force":false}` | 날짜별 경기 일정·결과 수집 |
 | 내부 | `POST` | `/internal/v1/records/collect` | 없음 | 팀 순위, 타자·투수 시즌 기록, 공식 MVP 수집 |
 | 내부 | `POST` | `/internal/v1/games/{gameId}/details/collect` | 내부 경기 ID | 완료 경기의 결승타·투수 기록 수집 |
@@ -136,6 +137,12 @@ curl -X POST http://localhost:8085/internal/v1/collections \
   -H "Authorization: Bearer $(grep '^ADMIN_API_KEY=' .env | cut -d= -f2-)" \
   -H 'Content-Type: application/json' \
   -d '{"targetDate":"2026-08-05","force":false}'
+
+# 날짜별 경기·순위·선수 기록·종료 경기 상세를 한 번에 수집
+curl -X POST http://localhost:8085/internal/v1/collections/all \
+  -H "Authorization: Bearer $(grep '^ADMIN_API_KEY=' .env | cut -d= -f2-)" \
+  -H 'Content-Type: application/json' \
+  -d '{"targetDate":"2026-08-05"}'
 
 # 내부 경기 ID 2의 라인업·공식 분석을 수집하고 조회
 curl -X POST http://localhost:8085/internal/v1/games/2/preview/collect \

@@ -3,7 +3,9 @@ from datetime import date
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.application.use_cases.collect_all import CollectAllUseCase
 from app.application.use_cases.collect_games import CollectGamesUseCase
+from app.application.use_cases.collect_records import CollectRecordsUseCase
 from app.infrastructure.config import settings
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"])
@@ -37,3 +39,17 @@ async def collect(
         "unchangedCount": result.unchanged_count,
         "failedCount": result.failed_count,
     }
+
+
+@router.post("/collections/all")
+async def collect_all(
+    payload: CollectionRequest, request: Request, authorization: str | None = Header(None)
+) -> dict:
+    authorize(authorization)
+    games = CollectGamesUseCase(request.app.state.game_source, request.app.state.session_factory)
+    records = CollectRecordsUseCase(
+        request.app.state.record_source, request.app.state.session_factory
+    )
+    return await CollectAllUseCase(games, records, request.app.state.session_factory).execute(
+        payload.target_date
+    )

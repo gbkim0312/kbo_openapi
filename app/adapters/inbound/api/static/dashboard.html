@@ -46,6 +46,7 @@
       { name: '경기 상세 기록', method: 'GET', path: '/api/v1/games/{gameId}/details', fields: [['gameId', 'number', '1']] },
       { name: '경기 라인업', method: 'GET', path: '/api/v1/games/{gameId}/lineups', fields: [['gameId', 'number', '1']] },
       { name: '경기 공식 분석', method: 'GET', path: '/api/v1/games/{gameId}/analysis', fields: [['gameId', 'number', '1']] },
+      { name: '전체 데이터 수집', method: 'POST', path: '/internal/v1/collections/all', admin: true, fields: [['targetDate', 'date', today]], body: values => ({ targetDate: values.targetDate, force: false }) },
       { name: '날짜별 경기 수집', method: 'POST', path: '/internal/v1/collections', admin: true, fields: [['targetDate', 'date', today], ['force', 'checkbox', '']], body: values => ({ targetDate: values.targetDate, force: values.force }) },
       { name: '순위·선수 기록·MVP 수집', method: 'POST', path: '/internal/v1/records/collect', admin: true },
       { name: '경기 상세 기록 수집', method: 'POST', path: '/internal/v1/games/{gameId}/details/collect', admin: true, fields: [['gameId', 'number', '1']] },
