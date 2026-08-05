@@ -79,7 +79,7 @@ async def get_games(
     )
     async with request.app.state.session_factory() as session:
         games = list((await session.scalars(stmt)).all())
-    next_cursor = games[limit].id if len(games) > limit else None
+    next_cursor = games[limit - 1].id if len(games) > limit else None
     games = games[:limit]
     return {
         "games": [output(game).model_dump(by_alias=True) for game in games],

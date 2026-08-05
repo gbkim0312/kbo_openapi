@@ -5,8 +5,10 @@ from app.adapters.outbound.persistence.repositories.sqlalchemy_raw_snapshot_repo
     SqlAlchemyRawSnapshotRepository,
 )
 from app.adapters.outbound.sources.kbo_http_source import KboHttpSource
+from app.adapters.outbound.sources.kbo_record_source import KboRecordSource
 from app.adapters.outbound.sources.parser.game_parser import KboScheduleParser
 from app.application.use_cases.collect_games import CollectGamesUseCase
+from app.application.use_cases.collect_records import CollectRecordsUseCase
 from app.infrastructure.config import Settings, settings
 
 
@@ -15,3 +17,8 @@ def create_collect_use_case(config: Settings = settings) -> CollectGamesUseCase:
     snapshots = SqlAlchemyRawSnapshotRepository(sessions, config.raw_snapshot_max_bytes)
     source = KboHttpSource(config, KboScheduleParser(config.kbo_base_url), snapshots)
     return CollectGamesUseCase(source, sessions)
+
+
+def create_record_use_case(config: Settings = settings) -> CollectRecordsUseCase:
+    sessions: async_sessionmaker = make_session_factory(config.database_url)
+    return CollectRecordsUseCase(KboRecordSource(config), sessions)

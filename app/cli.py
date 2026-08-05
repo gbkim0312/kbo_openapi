@@ -23,6 +23,8 @@ def main() -> None:
         if len(sys.argv) != 4:
             raise SystemExit("Usage: backfill YYYY-MM-DD YYYY-MM-DD")
         asyncio.run(backfill(date.fromisoformat(sys.argv[2]), date.fromisoformat(sys.argv[3])))
+    elif command == "collect-records":
+        asyncio.run(collect_records())
     else:
         raise SystemExit(f"Unknown command: {command}")
 
@@ -41,14 +43,20 @@ async def backfill(start: date, end: date) -> None:
         await collect_date(start + timedelta(days=offset))
 
 
+async def collect_records() -> None:
+    from app.bootstrap.create_worker import create_record_use_case
+
+    print(await create_record_use_case().execute())
+
+
 async def run_worker() -> None:
     from app.adapters.inbound.scheduler.collection_scheduler import create_scheduler
-    from app.bootstrap.create_worker import create_collect_use_case
+    from app.bootstrap.create_worker import create_collect_use_case, create_record_use_case
     from app.infrastructure.config import settings
 
     if not settings.scheduler_enabled:
         await asyncio.Event().wait()
-    scheduler = create_scheduler(create_collect_use_case())
+    scheduler = create_scheduler(create_collect_use_case(), create_record_use_case())
     scheduler.start()
     try:
         await asyncio.Event().wait()

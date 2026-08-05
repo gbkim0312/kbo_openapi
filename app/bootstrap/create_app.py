@@ -10,12 +10,15 @@ from app.adapters.inbound.api.exception_handlers import (
 )
 from app.adapters.inbound.api.internal.collections import router as collections_router
 from app.adapters.inbound.api.v1.games import router as games_router
+from app.adapters.inbound.api.v1.records import router as records_router
 from app.adapters.inbound.api.v1.teams import router as teams_router
 from app.adapters.outbound.persistence.database import make_session_factory
 from app.adapters.outbound.persistence.repositories.sqlalchemy_raw_snapshot_repository import (
     SqlAlchemyRawSnapshotRepository,
 )
 from app.adapters.outbound.sources.kbo_http_source import KboHttpSource
+from app.adapters.outbound.sources.kbo_preview_source import KboPreviewSource
+from app.adapters.outbound.sources.kbo_record_source import KboRecordSource
 from app.adapters.outbound.sources.parser.game_parser import KboScheduleParser
 from app.domain.exceptions import DomainError
 from app.infrastructure.config import settings
@@ -30,6 +33,8 @@ def create_app() -> FastAPI:
     app.state.game_source = KboHttpSource(
         settings, KboScheduleParser(settings.kbo_base_url), snapshots
     )
+    app.state.record_source = KboRecordSource(settings)
+    app.state.preview_source = KboPreviewSource(settings)
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
@@ -49,6 +54,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(games_router)
+    app.include_router(records_router)
     app.include_router(teams_router)
     app.include_router(collections_router)
     app.add_exception_handler(DomainError, domain_error_handler)

@@ -16,6 +16,7 @@ KBO 공식 일정 응답 → 수집/정규화 → PostgreSQL → REST API / Swag
 - 같은 경기를 재수집해도 중복 없이 저장
 - 점수·상태 등이 바뀌면 revision과 변경 이력 생성
 - 수동 날짜 수집, 31일 이내 backfill, 정기 수집 worker
+- 게임센터 라인업(확정 여부·타순·포지션·WAR)과 공식 프리뷰 분석 수집
 - Swagger UI 및 공개 조회 API
 
 ## 시작 전 준비
@@ -94,31 +95,55 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 
 응답의 `insertedCount`, `updatedCount`, `unchangedCount`를 확인합니다. 수집 날짜는 `YYYY-MM-DD` 형식입니다.
 
-## 데이터 조회 방법
+## API 명세
 
-수집 이후에는 인증 없이 조회 API를 사용할 수 있습니다.
+기본 주소는 `http://localhost:8085`입니다. 모든 공개 조회 API는 인증이 필요 없고, `internal` API는 `Authorization: Bearer {ADMIN_API_KEY}` 헤더가 필요합니다. 상세 스키마와 즉시 실행은 [Swagger UI](http://localhost:8085/docs)에서 확인할 수 있습니다.
+
+| 구분 | Method | Path | 파라미터 / 본문 | 설명 |
+| --- | --- | --- | --- | --- |
+| 상태 | `GET` | `/health/live` | 없음 | API 프로세스 상태 |
+| 상태 | `GET` | `/health/ready` | 없음 | PostgreSQL 연결 상태 |
+| 공개 | `GET` | `/api/v1/teams` | 없음 | 등록된 KBO 팀 목록 |
+| 공개 | `GET` | `/api/v1/games` | `date` 또는 `from`·`to`, `team`, `status`, `leagueType`, `limit`, `cursor` | 경기 목록. 기간은 최대 31일이며 `date`와 기간 조건은 함께 사용할 수 없음 |
+| 공개 | `GET` | `/api/v1/games/{gameId}` | 내부 경기 ID | 단일 경기 |
+| 공개 | `GET` | `/api/v1/results/latest` | `team`, `limit` | 최신 종료 경기 |
+| 공개 | `GET` | `/api/v1/rankings` | `date`(선택) | 팀 순위, 승차, 최근 10경기, 연승·연패 |
+| 공개 | `GET` | `/api/v1/player-stats` | `season`(필수), `role`, `team`, `limit` | 시즌 타자·투수 기록. `role`: `hitter` 또는 `pitcher` |
+| 공개 | `GET` | `/api/v1/awards` | `season`(선택) | KBO 공식 시즌 MVP |
+| 공개 | `GET` | `/api/v1/games/{gameId}/details` | 내부 경기 ID | 결승타와 투수별 경기 기록 |
+| 공개 | `GET` | `/api/v1/games/{gameId}/lineups` | 내부 경기 ID | 최신 수집 라인업, 타순·포지션·WAR·확정 여부 |
+| 공개 | `GET` | `/api/v1/games/{gameId}/analysis` | 내부 경기 ID | KBO 게임센터의 팀 비교·핵심선수 프리뷰 분석 |
+| 내부 | `POST` | `/internal/v1/collections` | `{"targetDate":"YYYY-MM-DD","force":false}` | 날짜별 경기 일정·결과 수집 |
+| 내부 | `POST` | `/internal/v1/records/collect` | 없음 | 팀 순위, 타자·투수 시즌 기록, 공식 MVP 수집 |
+| 내부 | `POST` | `/internal/v1/games/{gameId}/details/collect` | 내부 경기 ID | 완료 경기의 결승타·투수 기록 수집 |
+| 내부 | `POST` | `/internal/v1/games/{gameId}/preview/collect` | 내부 경기 ID | 라인업과 공식 프리뷰 분석 수집 |
+
+`/api/v1/games`의 `score`는 경기 전 `null`, 무득점은 `0`입니다. `cursor`에는 이전 응답의 `meta.nextCursor`를 전달합니다. 잘못된 날짜·기간·페이지 크기는 HTTP 422를, 잘못된 내부 API 토큰은 HTTP 401을 반환합니다.
+
+## API 사용 예시
 
 ```sh
-# 등록된 KBO 팀 목록
-curl http://localhost:8085/api/v1/teams
+# 특정 날짜의 경기와 팀 필터
+curl 'http://localhost:8085/api/v1/games?date=2026-08-05&team=SS&limit=20'
 
-# 특정 날짜의 경기
-curl 'http://localhost:8085/api/v1/games?date=2026-08-05'
+# 팀 순위 및 2026년 투수 기록
+curl http://localhost:8085/api/v1/rankings
+curl 'http://localhost:8085/api/v1/player-stats?season=2026&role=pitcher&limit=20'
 
-# 기간 조회(기본 최대 31일)
-curl 'http://localhost:8085/api/v1/games?from=2026-08-01&to=2026-08-05'
+# 날짜별 경기 수집
+curl -X POST http://localhost:8085/internal/v1/collections \
+  -H "Authorization: Bearer $(grep '^ADMIN_API_KEY=' .env | cut -d= -f2-)" \
+  -H 'Content-Type: application/json' \
+  -d '{"targetDate":"2026-08-05","force":false}'
 
-# 팀 코드로 필터링: 삼성(SS), LG(LG), 한화(HH), SSG(SK) 등
-curl 'http://localhost:8085/api/v1/games?date=2026-08-05&team=SS'
-
-# 단일 경기
-curl http://localhost:8085/api/v1/games/123
-
-# 가장 최근 종료된 경기
-curl 'http://localhost:8085/api/v1/results/latest?limit=10'
+# 내부 경기 ID 2의 라인업·공식 분석을 수집하고 조회
+curl -X POST http://localhost:8085/internal/v1/games/2/preview/collect \
+  -H "Authorization: Bearer $(grep '^ADMIN_API_KEY=' .env | cut -d= -f2-)"
+curl http://localhost:8085/api/v1/games/2/lineups
+curl http://localhost:8085/api/v1/games/2/analysis
 ```
 
-경기 목록은 `scheduledAt`, `id` 순으로 정렬됩니다. `score.away`와 `score.home`은 경기 전에는 `null`일 수 있으며, 0점과 구분됩니다.
+`gameId`는 `sourceGameId`가 아니라 `/api/v1/games` 응답의 숫자 `id`입니다. `lineups.confirmed`가 `true`면 KBO가 확정 라인업으로 표시한 데이터이고, `false`면 확정 전 최근 라인업입니다. `analysis.officialAnalysis`는 KBO 공식 분석 원문 구조이며 자체 승률 예측 모델은 아닙니다.
 
 ## 수동 수집과 backfill
 
@@ -130,12 +155,16 @@ docker compose run --rm kbo-worker collect-date 2026-08-05
 
 # 과거 31일 이내 범위 수집
 docker compose run --rm kbo-worker backfill 2026-08-01 2026-08-05
+
+# 팀 순위, 선수 기록, 공식 MVP 수집
+docker compose run --rm kbo-worker collect-records
 ```
 
 정기 worker는 다음 시간(Asia/Seoul)에 동작합니다.
 
 - 매일 00:10: 전날 경기 재수집
 - 매일 06:00, 12:00: 당일 경기 수집
+- 매일 00:30: 팀 순위·선수 시즌 기록·공식 MVP 수집
 - 17:00~23:59: 5분마다 당일 경기 재수집
 
 정기 수집을 끄려면 `.env`에서 `SCHEDULER_ENABLED=false`로 변경한 뒤 worker를 재시작합니다.
