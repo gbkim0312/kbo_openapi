@@ -48,6 +48,6 @@ def create_scheduler(
         collect_today_and_live_details, CronTrigger(hour="17-23", minute="*/5", timezone=SEOUL)
     )
     scheduler.add_job(
-        collect_today_previews, CronTrigger(hour="16-23", minute="*/15", timezone=SEOUL)
+        collect_today_previews, CronTrigger(hour="12-23", minute="*/15", timezone=SEOUL)
     )
     return scheduler
