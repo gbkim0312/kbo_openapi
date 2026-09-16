@@ -135,6 +135,12 @@ class KboScheduleParser:
     def _status(self, note: str, away_score: int | None, home_score: int | None) -> GameStatus:
         if note and note != "-":
             return map_status(note)
+        # KBO publishes confirmed lineups before first pitch with a placeholder
+        # score of 0:0.  A pair of score values alone therefore does not prove
+        # that the game has finished.  Preserve that pre-game state so it is
+        # not exposed through the completed-results endpoint.
+        if away_score == 0 and home_score == 0:
+            return GameStatus.PRE_GAME
         return (
             GameStatus.COMPLETED
             if away_score is not None and home_score is not None

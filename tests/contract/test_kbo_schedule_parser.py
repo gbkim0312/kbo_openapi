@@ -17,3 +17,17 @@ def test_parses_observed_kbo_schedule_response() -> None:
     )
     assert (game.away_score, game.home_score, game.status) == (0, 3, GameStatus.COMPLETED)
     assert game.scheduled_at and game.scheduled_at.utcoffset().total_seconds() == 9 * 3600
+
+
+def test_treats_zero_zero_lineup_placeholder_as_pre_game() -> None:
+    body = (Path(__file__).parents[1] / "fixtures/kbo_responses/regular_completed.json").read_text()
+    body = body.replace(
+        '<span class=\\"win\\">3</span>', '<span class=\\"win\\">0</span>'
+    )
+
+    games = KboScheduleParser("https://www.koreabaseball.com").parse(
+        body, date(2026, 8, 5)
+    )
+
+    assert len(games) == 1
+    assert games[0].status is GameStatus.PRE_GAME
