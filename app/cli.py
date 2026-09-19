@@ -61,7 +61,10 @@ async def run_worker() -> None:
     if not settings.scheduler_enabled:
         await asyncio.Event().wait()
     scheduler = create_scheduler(
-        create_collect_use_case(), create_record_use_case(), create_live_game_use_case()
+        create_collect_use_case(),
+        create_record_use_case(),
+        create_live_game_use_case(),
+        settings,
     )
     scheduler.start()
     try:
