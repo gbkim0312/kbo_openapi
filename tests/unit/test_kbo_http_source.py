@@ -64,6 +64,7 @@ def test_applies_explicit_game_center_live_state_and_score() -> None:
                 "CANCEL_SC_NM": "정상경기",
                 "T_SCORE_CN": "1",
                 "B_SCORE_CN": "0",
+                "SCORE_CK": "1",
                 "GAME_INN_NO": 3,
                 "GAME_TB_SC_NM": "말",
             }

@@ -173,6 +173,8 @@ class KboHttpSource(GameSource):
             status, source_status_text = GameStatus.IN_PROGRESS, "경기중"
 
         def score(key: str) -> int | None:
+            if str(live.get("SCORE_CK") or "0") != "1":
+                return None
             value = live.get(key)
             return int(value) if value is not None and str(value).strip().isdigit() else None
 
