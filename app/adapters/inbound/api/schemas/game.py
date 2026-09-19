@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +25,36 @@ class ScoreOut(BaseModel):
     errors: dict[str, int | None] | None = None
     walks: dict[str, int | None] | None = None
     scoreboard_source: str | None = Field(default=None, alias="scoreboardSource")
+    live: "LiveStateOut | None" = None
+
+
+class PlayerRefOut(BaseModel):
+    id: str
+    name: str | None = None
+    team: str | None = None
+    side: str | None = None
+
+
+class LiveCountOut(BaseModel):
+    balls: int | None = None
+    strikes: int | None = None
+    outs: int | None = None
+
+
+class LiveRunnersOut(BaseModel):
+    first: PlayerRefOut | None = None
+    second: PlayerRefOut | None = None
+    third: PlayerRefOut | None = None
+
+
+class LiveStateOut(BaseModel):
+    pitcher: PlayerRefOut | None = None
+    batter: PlayerRefOut | None = None
+    count: LiveCountOut
+    runners: LiveRunnersOut
+    source: str
+    relay_number: int | None = Field(default=None, alias="relayNumber")
+    inning: int | None = None
 
 
 class GameOut(BaseModel):

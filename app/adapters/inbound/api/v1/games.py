@@ -57,6 +57,7 @@ def output(game: GameModel) -> GameOut:
                 for side in ("away", "home")
             } if game.scoreboard else None,
             scoreboardSource=(game.scoreboard or {}).get("source") if game.scoreboard else None,
+            live=(game.scoreboard or {}).get("liveState") if game.scoreboard else None,
         ),
         inning=game.inning,
         revision=game.revision,

@@ -101,8 +101,18 @@ class CollectLiveGameDataUseCase:
             scoreboard = await self.records.source.fetch_scoreboard(
                 game.source_game_id, game.season
             )
-        if scoreboard is None:
+            fetch_live_state = getattr(self.records.source, "fetch_live_state", None)
+            live_state = (
+                await fetch_live_state(game.source_game_id, game.season)
+                if fetch_live_state
+                else None
+            )
+        if scoreboard is None and live_state is None:
             return False
+        if scoreboard is None:
+            scoreboard = {"source": "naver-sports"}
+        if live_state is not None:
+            scoreboard = {**scoreboard, "liveState": live_state}
         async with self.sessions() as session, session.begin():
             game = await session.get(GameModel, game_id)
             if game is not None:

@@ -47,6 +47,20 @@ class HybridRecordSource:
     async def fetch_box_score(self, source_game_id: str, season: int):
         return await self.kbo.fetch_box_score(source_game_id, season)
 
+    async def fetch_live_state(self, source_game_id: str, season: int):
+        if self.config.scoreboard_provider.lower() == "kbo":
+            return None
+        if not self.config.naver_sports_enabled:
+            return None
+        try:
+            return await self.naver.fetch_live_state(source_game_id, season)
+        except Exception:
+            self.logger.exception(
+                "Naver live state collection failed",
+                extra={"source_game_id": source_game_id},
+            )
+            return None
+
     async def fetch_team_ranks(self):
         return await self.kbo.fetch_team_ranks()
 

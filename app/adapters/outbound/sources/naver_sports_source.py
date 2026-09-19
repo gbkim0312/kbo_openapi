@@ -33,6 +33,22 @@ class NaverSportsSource:
             return None
         return self._parse_scoreboard(game)
 
+    async def fetch_live_state(self, source_game_id: str, season: int) -> dict | None:
+        naver_game_id = self.to_naver_game_id(source_game_id, season)
+        url = f"{self.config.naver_sports_base_url}/schedule/games/{naver_game_id}/relay"
+        async with httpx.AsyncClient(
+            headers={"User-Agent": self.config.naver_sports_user_agent},
+            timeout=self.config.naver_sports_timeout_seconds,
+            follow_redirects=True,
+        ) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+        payload = response.json()
+        relay = ((payload.get("result") or {}).get("textRelayData") or {})
+        if not isinstance(relay, dict):
+            return None
+        return self._parse_live_state(relay, source_game_id)
+
     @staticmethod
     def to_naver_game_id(source_game_id: str, season: int) -> str:
         """Map KBO's 20260919SSLT0 identity to Naver's 20260919SSLT02026."""
@@ -67,6 +83,59 @@ class NaverSportsSource:
                 "away": game.get("awayStarterName"),
                 "home": game.get("homeStarterName"),
             },
+        }
+
+    @staticmethod
+    def _parse_live_state(relay: dict, source_game_id: str) -> dict | None:
+        state = relay.get("currentGameState")
+        if not isinstance(state, dict):
+            return None
+
+        players: dict[str, dict[str, str | None]] = {}
+        for side, team_code, key in (
+            ("home", source_game_id[10:12], "homeLineup"),
+            ("away", source_game_id[8:10], "awayLineup"),
+        ):
+            lineup = relay.get(key)
+            if not isinstance(lineup, dict):
+                continue
+            for group in ("batter", "pitcher"):
+                for player in lineup.get(group, []):
+                    if not isinstance(player, dict) or not player.get("pcode"):
+                        continue
+                    players[str(player["pcode"])] = {
+                        "id": str(player["pcode"]),
+                        "name": str(player.get("name")) if player.get("name") else None,
+                        "team": team_code or None,
+                        "side": side,
+                    }
+
+        def player(value: object) -> dict[str, str | None] | None:
+            key = str(value or "")
+            if not key or key == "0":
+                return None
+            return players.get(key, {"id": key, "name": None, "team": None, "side": None})
+
+        def number(key: str) -> int | None:
+            value = state.get(key)
+            return int(str(value)) if str(value or "").isdigit() else None
+
+        return {
+            "pitcher": player(state.get("pitcher")),
+            "batter": player(state.get("batter")),
+            "count": {
+                "balls": number("ball"),
+                "strikes": number("strike"),
+                "outs": number("out"),
+            },
+            "runners": {
+                "first": player(state.get("base1")),
+                "second": player(state.get("base2")),
+                "third": player(state.get("base3")),
+            },
+            "source": "naver-sports",
+            "relayNumber": relay.get("no"),
+            "inning": relay.get("inn"),
         }
 
     @staticmethod
