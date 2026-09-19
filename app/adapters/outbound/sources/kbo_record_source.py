@@ -205,6 +205,88 @@ class KboRecordSource:
                 )
         return decisive, records
 
+    async def fetch_scoreboard(self, source_game_id: str, season: int) -> dict | None:
+        """Fetch KBO's inning/R-H-E-B scoreboard snapshot."""
+        game_date = source_game_id[:8]
+        referer = (
+            f"{self.config.kbo_base_url}/Schedule/GameCenter/Main.aspx?"
+            f"gameDate={game_date}&gameId={source_game_id}&section=LIVE"
+        )
+        async with httpx.AsyncClient(
+            headers={"User-Agent": self.config.kbo_user_agent},
+            timeout=self.config.kbo_total_timeout_seconds,
+            follow_redirects=True,
+        ) as client:
+            await client.get(referer)
+            response = await client.post(
+                f"{self.config.kbo_base_url}/ws/Schedule.asmx/GetScoreBoardScroll",
+                data={"leId": "1", "srId": "0", "seasonId": str(season), "gameId": source_game_id},
+                headers={
+                    "Referer": referer,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                },
+            )
+            response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or payload.get("code") == "200":
+            return None
+        return self._parse_scoreboard(payload)
+
+    @staticmethod
+    def _parse_scoreboard(payload: dict) -> dict:
+        def table(value: object) -> dict:
+            if not isinstance(value, str) or not value:
+                return {}
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+
+        def cells(row: object) -> list[str]:
+            if not isinstance(row, dict):
+                return []
+            return [
+                str(cell.get("Text", "")).strip()
+                for cell in row.get("row", [])
+                if isinstance(cell, dict)
+            ]
+
+        innings_table = table(payload.get("table2"))
+        totals_table = table(payload.get("table3"))
+        headers = cells((innings_table.get("headers") or [{}])[0])
+        rows = [cells(row) for row in innings_table.get("rows", [])]
+        innings: list[dict[str, int | None]] = []
+        for index, header in enumerate(headers):
+            if not header.isdigit():
+                continue
+
+            def value(row_index: int, column: int = index) -> int | None:
+                if row_index >= len(rows) or column >= len(rows[row_index]):
+                    return None
+                raw = rows[row_index][column]
+                return int(raw) if raw.isdigit() else None
+
+            innings.append({"inning": int(header), "away": value(0), "home": value(1)})
+
+        totals = [cells(row) for row in totals_table.get("rows", [])]
+
+        def totals_for(index: int) -> dict[str, int | None]:
+            row = totals[index] if index < len(totals) else []
+            keys = ("runs", "hits", "errors", "walks")
+            return {
+                key: int(row[pos]) if pos < len(row) and row[pos].isdigit() else None
+                for pos, key in enumerate(keys)
+            }
+
+        return {
+            "innings": innings,
+            "totals": {"away": totals_for(0), "home": totals_for(1)},
+            "maxInning": payload.get("maxInning"),
+            "source": "kbo-scoreboard",
+        }
+
     async def _get(self, url: str) -> str:
         async with httpx.AsyncClient(
             headers={"User-Agent": self.config.kbo_user_agent},

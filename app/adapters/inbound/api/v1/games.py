@@ -33,7 +33,23 @@ def output(game: GameModel) -> GameOut:
         sourceStatusText=game.source_status_text,
         awayTeam=TeamOut(code=game.away_team.code, name=game.away_team.name),
         homeTeam=TeamOut(code=game.home_team.code, name=game.home_team.name),
-        score=ScoreOut(away=game.away_score, home=game.home_score),
+        score=ScoreOut(
+            away=game.away_score,
+            home=game.home_score,
+            innings=(game.scoreboard or {}).get("innings"),
+            hits={
+                side: (game.scoreboard or {}).get("totals", {}).get(side, {}).get("hits")
+                for side in ("away", "home")
+            } if game.scoreboard else None,
+            errors={
+                side: (game.scoreboard or {}).get("totals", {}).get(side, {}).get("errors")
+                for side in ("away", "home")
+            } if game.scoreboard else None,
+            walks={
+                side: (game.scoreboard or {}).get("totals", {}).get(side, {}).get("walks")
+                for side in ("away", "home")
+            } if game.scoreboard else None,
+        ),
         inning=game.inning,
         revision=game.revision,
         lastCollectedAt=game.last_collected_at,

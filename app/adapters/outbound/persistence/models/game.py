@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Date,
     DateTime,
@@ -55,6 +56,7 @@ class GameModel(TimestampMixin, Base):
     away_score: Mapped[int | None] = mapped_column(Integer)
     home_score: Mapped[int | None] = mapped_column(Integer)
     inning: Mapped[str | None] = mapped_column(String(30))
+    scoreboard: Mapped[dict | None] = mapped_column(JSON)
     result_text: Mapped[str | None] = mapped_column(Text)
     winning_pitcher: Mapped[str | None] = mapped_column(String(100))
     losing_pitcher: Mapped[str | None] = mapped_column(String(100))

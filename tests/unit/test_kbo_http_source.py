@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.adapters.outbound.sources.kbo_http_source import KboHttpSource
+from app.adapters.outbound.sources.kbo_record_source import KboRecordSource
 from app.application.dto.source_game import SourceGame
 from app.domain.enums.game_status import GameStatus
 from app.domain.enums.league_type import LeagueType
@@ -75,3 +76,30 @@ def test_applies_explicit_game_center_live_state_and_score() -> None:
     assert enriched[0].status is GameStatus.IN_PROGRESS
     assert (enriched[0].away_score, enriched[0].home_score) == (1, 0)
     assert enriched[0].inning == "3회말"
+
+
+def test_parses_scoreboard_innings_and_totals() -> None:
+    source = KboRecordSource(Settings())
+    payload = {
+        "table2": (
+            '{"headers":[{"row":[{"Text":"1"},{"Text":"2"}]}],'
+            '"rows":[{"row":[{"Text":"1"},{"Text":"0"}]},'
+            '{"row":[{"Text":"0"},{"Text":"2"}]}]}'
+        ),
+        "table3": (
+            '{"rows":[{"row":[{"Text":"1"},{"Text":"4"},{"Text":"0"},{"Text":"2"}]},'
+            '{"row":[{"Text":"2"},{"Text":"3"},{"Text":"1"},{"Text":"1"}]}]}'
+        ),
+        "maxInning": 2,
+    }
+
+    scoreboard = source._parse_scoreboard(payload)
+
+    assert scoreboard["innings"] == [
+        {"inning": 1, "away": 1, "home": 0},
+        {"inning": 2, "away": 0, "home": 2},
+    ]
+    assert scoreboard["totals"] == {
+        "away": {"runs": 1, "hits": 4, "errors": 0, "walks": 2},
+        "home": {"runs": 2, "hits": 3, "errors": 1, "walks": 1},
+    }

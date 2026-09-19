@@ -70,9 +70,33 @@ class CollectLiveGameDataUseCase:
             )
         collected = failed = 0
         for game_id in game_ids:
+            scoreboard_ok = False
+            try:
+                scoreboard_ok = await self._collect_scoreboard(game_id)
+            except Exception:
+                pass
             try:
                 await self.records.collect_game_details(game_id)
-                collected += 1
+                collected += 1 if scoreboard_ok else 0
             except Exception:
-                failed += 1
+                if not scoreboard_ok:
+                    failed += 1
         return {"requested": len(game_ids), "collected": collected, "failed": failed}
+
+    async def _collect_scoreboard(self, game_id: int) -> bool:
+        async with self.sessions() as session:
+            game = await session.get(GameModel, game_id)
+            if game is None or not game.source_game_id:
+                return False
+            scoreboard = await self.records.source.fetch_scoreboard(
+                game.source_game_id, game.season
+            )
+        if scoreboard is None:
+            return False
+        async with self.sessions() as session, session.begin():
+            game = await session.get(GameModel, game_id)
+            if game is not None:
+                game.scoreboard = scoreboard
+                game.updated_at = datetime.now(UTC)
+                return True
+        return False
