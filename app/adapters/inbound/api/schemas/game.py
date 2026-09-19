@@ -9,13 +9,20 @@ class TeamOut(BaseModel):
     name: str
 
 
+class InningScoreOut(BaseModel):
+    inning: int
+    away: int | None
+    home: int | None
+
+
 class ScoreOut(BaseModel):
     away: int | None
     home: int | None
-    innings: dict[str, list[int | None]] | None = None
+    innings: list[InningScoreOut] | None = None
     hits: dict[str, int | None] | None = None
     errors: dict[str, int | None] | None = None
     walks: dict[str, int | None] | None = None
+    scoreboard_source: str | None = Field(default=None, alias="scoreboardSource")
 
 
 class GameOut(BaseModel):

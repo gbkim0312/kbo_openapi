@@ -17,6 +17,7 @@ KBO 공식 일정 응답 → 수집/정규화 → PostgreSQL → REST API / Swag
 - 점수·상태 등이 바뀌면 revision과 변경 이력 생성
 - 수동 날짜 수집, 31일 이내 backfill, 정기 수집 worker
 - 게임센터 라인업(확정 여부·타순·포지션·WAR)과 공식 프리뷰 분석 수집
+- KBO 상세 스코어보드 실패 시 네이버 스포츠 실시간 스코어 fallback
 - Swagger UI 및 공개 조회 API
 
 ## 시작 전 준비
@@ -187,6 +188,8 @@ docker compose run --rm kbo-worker collect-records
 
 실시간 수집 주기는 `.env`의 `KBO_REFRESH_*_SECONDS`로 조정할 수 있습니다. 기본값은 대기 300초, 경기 직전 60초, 경기 중 15초, 승부처 10초이며 양의 정수가 아니면 안전한 기본값으로 처리합니다. 환경 변수 변경은 worker 재시작 후 적용됩니다.
 
+실시간 상세 스코어보드는 `SCOREBOARD_PROVIDER`로 선택합니다. 기본값 `hybrid`는 KBO 공식 스코어보드를 먼저 요청하고 응답이 비어 있으면 네이버 스포츠의 게임센터 데이터를 사용합니다. `kbo` 또는 `naver`로 단일 공급자를 선택할 수도 있습니다. 네이버 스포츠 endpoint는 공식 개발자 Open API가 아닌 웹 서비스용 endpoint이므로 개인용 fallback으로만 사용하고, 응답 변경 가능성에 대비해 API 응답의 `score.scoreboardSource`를 확인하세요.
+
 정기 수집을 끄려면 `.env`에서 `SCHEDULER_ENABLED=false`로 변경한 뒤 worker를 재시작합니다.
 
 ## 환경 변수
@@ -197,6 +200,10 @@ docker compose run --rm kbo-worker collect-records
 | `DATABASE_URL` | `postgresql+asyncpg://kbo:kbo@postgres:5432/kbo` | API/worker DB 연결 |
 | `ADMIN_API_KEY` | `change-me` | 내부 수집 API Bearer 토큰 |
 | `KBO_SCHEDULE_URL` | 공식 KBO 일정 endpoint | 수집 endpoint |
+| `SCOREBOARD_PROVIDER` | `hybrid` | 실시간 상세 스코어보드 공급자(`kbo`, `naver`, `hybrid`) |
+| `NAVER_SPORTS_ENABLED` | `true` | hybrid 모드의 네이버 fallback 활성화 |
+| `NAVER_SPORTS_BASE_URL` | `https://api-gw.sports.naver.com` | 네이버 스포츠 gateway |
+| `NAVER_SPORTS_TIMEOUT_SECONDS` | `10` | 네이버 요청 timeout |
 | `KBO_MAX_RETRIES` | `3` | 일시적 통신 실패 재시도 횟수 |
 | `RAW_SNAPSHOT_ENABLED` | `true` | 원본 응답 보관 여부 |
 | `RAW_SNAPSHOT_MAX_BYTES` | `5242880` | 원본 응답 최대 저장 크기 |

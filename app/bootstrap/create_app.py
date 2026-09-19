@@ -20,6 +20,8 @@ from app.adapters.outbound.persistence.repositories.sqlalchemy_raw_snapshot_repo
 from app.adapters.outbound.sources.kbo_http_source import KboHttpSource
 from app.adapters.outbound.sources.kbo_preview_source import KboPreviewSource
 from app.adapters.outbound.sources.kbo_record_source import KboRecordSource
+from app.adapters.outbound.sources.hybrid_record_source import HybridRecordSource
+from app.adapters.outbound.sources.naver_sports_source import NaverSportsSource
 from app.adapters.outbound.sources.parser.game_parser import KboScheduleParser
 from app.domain.exceptions import DomainError
 from app.infrastructure.config import settings
@@ -34,7 +36,9 @@ def create_app() -> FastAPI:
     app.state.game_source = KboHttpSource(
         settings, KboScheduleParser(settings.kbo_base_url), snapshots
     )
-    app.state.record_source = KboRecordSource(settings)
+    app.state.record_source = HybridRecordSource(
+        KboRecordSource(settings), NaverSportsSource(settings)
+    )
     app.state.preview_source = KboPreviewSource(settings)
 
     @app.middleware("http")

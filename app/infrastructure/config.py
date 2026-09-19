@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     kbo_http_fallback_on_schema_error: bool = True
     kbo_cli_enabled: bool = True
     kbo_playwright_enabled: bool = False
+    scoreboard_provider: str = "hybrid"
+    naver_sports_base_url: str = "https://api-gw.sports.naver.com"
+    naver_sports_user_agent: str = "kbo-result-api/0.1"
+    naver_sports_timeout_seconds: float = 10
+    naver_sports_enabled: bool = True
     raw_snapshot_enabled: bool = True
     raw_snapshot_max_bytes: int = 5_242_880
     scheduler_enabled: bool = True
