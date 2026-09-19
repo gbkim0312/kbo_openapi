@@ -153,7 +153,15 @@ class CollectGamesUseCase:
         return model
 
     def _update(self, game, dto, digest, now):
-        for name in (
+        # A transient game-center failure can make the schedule endpoint fall
+        # back to its pre-game placeholder. Never regress a known live game to
+        # that placeholder or erase its last live score.
+        preserve_live = game.status in {"in_progress", "delayed", "suspended"} and dto.status in {
+            "scheduled",
+            "pre_game",
+            "unknown",
+        }
+        fields = (
             "source_game_id",
             "scheduled_at",
             "stadium",
@@ -168,14 +176,19 @@ class CollectGamesUseCase:
             "source_url",
             "source_updated_at",
             "source_status_text",
-        ):
-            setattr(game, name, getattr(dto, name))
-        game.status, game.canonical_hash, game.last_collected_at, game.updated_at = (
-            dto.status.value,
-            digest,
-            now,
-            now,
         )
+        for name in fields:
+            if preserve_live and name in {
+                "away_score",
+                "home_score",
+                "inning",
+                "source_status_text",
+            }:
+                continue
+            setattr(game, name, getattr(dto, name))
+        if not preserve_live:
+            game.status = dto.status.value
+        game.canonical_hash, game.last_collected_at, game.updated_at = digest, now, now
 
     @staticmethod
     def _enrich_source_identity(game, dto) -> None:
