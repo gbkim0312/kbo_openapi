@@ -120,7 +120,7 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 내부 | `POST` | `/internal/v1/games/{gameId}/details/collect` | 내부 경기 ID | 완료 경기의 결승타·투수 기록 수집 |
 | 내부 | `POST` | `/internal/v1/games/{gameId}/preview/collect` | 내부 경기 ID | 라인업과 공식 프리뷰 분석 수집 |
 
-`/api/v1/games`의 `score`는 경기 전 `null`, 무득점은 `0`입니다. `cursor`에는 이전 응답의 `meta.nextCursor`를 전달합니다. 잘못된 날짜·기간·페이지 크기는 HTTP 422를, 잘못된 내부 API 토큰은 HTTP 401을 반환합니다.
+`/api/v1/games`의 `status`는 `scheduled`, `pre_game`, `live`, `delayed`, `suspended`, `final`, `cancelled`, `postponed`, `unknown`으로 제공합니다. 기존 내부 값인 `in_progress`·`completed`도 조회 필터에서 호환됩니다. `score`는 경기 전 `null`, 무득점은 `0`입니다. `cursor`에는 이전 응답의 `meta.nextCursor`를 전달합니다. 잘못된 날짜·기간·페이지 크기는 HTTP 422를, 잘못된 내부 API 토큰은 HTTP 401을 반환합니다.
 
 ## API 사용 예시
 
