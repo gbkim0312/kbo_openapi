@@ -44,3 +44,39 @@ class GameOut(BaseModel):
     revision: int
     last_collected_at: datetime = Field(alias="lastCollectedAt")
     updated_at: datetime = Field(alias="updatedAt")
+
+
+class ApiErrorOut(BaseModel):
+    code: str
+    message: str
+
+
+class GameListMetaOut(BaseModel):
+    count: int
+    next_cursor: int | None = Field(default=None, alias="nextCursor")
+    collected_at: datetime | None = Field(default=None, alias="collectedAt")
+    fetched_at: datetime | None = Field(default=None, alias="fetchedAt")
+    source: str
+    refresh_interval_seconds: int = Field(alias="refreshIntervalSeconds")
+    stale: bool
+
+
+class GameListOut(BaseModel):
+    games: list[GameOut]
+    meta: GameListMetaOut
+
+
+class ErrorResponseOut(BaseModel):
+    error: ApiErrorOut
+
+
+class LatestResultsMetaOut(BaseModel):
+    fetched_at: datetime | None = Field(default=None, alias="fetchedAt")
+    source: str
+    refresh_interval_seconds: int = Field(alias="refreshIntervalSeconds")
+    stale: bool
+
+
+class LatestResultsOut(BaseModel):
+    games: list[GameOut]
+    meta: LatestResultsMetaOut

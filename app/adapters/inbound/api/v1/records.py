@@ -2,7 +2,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.adapters.outbound.persistence.models.preview import (
     GameLineupEntryModel,
@@ -29,26 +29,40 @@ def require_admin(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="UNAUTHORIZED")
 
 
+def _pitcher_result(stats: dict, *keys: str) -> int | None:
+    for key in keys:
+        value = stats.get(key)
+        if value is not None and str(value).strip().isdigit():
+            return int(str(value).strip())
+    return None
+
+
 @router.get("/api/v1/rankings")
 async def rankings(
     request: Request, date_: Annotated[date | None, Query(alias="date")] = None
 ) -> dict:
-    stmt = select(TeamRankSnapshotModel, TeamModel).join(
-        TeamModel, TeamModel.id == TeamRankSnapshotModel.team_id
-    )
     async with request.app.state.session_factory() as session:
         if date_:
-            stmt = stmt.where(TeamRankSnapshotModel.as_of_date == date_)
+            snapshot_date = await session.scalar(
+                select(func.max(TeamRankSnapshotModel.as_of_date)).where(
+                    TeamRankSnapshotModel.as_of_date <= date_
+                )
+            )
         else:
-            latest_date = await session.scalar(
+            snapshot_date = await session.scalar(
                 select(TeamRankSnapshotModel.as_of_date)
                 .order_by(TeamRankSnapshotModel.as_of_date.desc())
                 .limit(1)
             )
-            stmt = stmt.where(TeamRankSnapshotModel.as_of_date == latest_date)
+        stmt = (
+            select(TeamRankSnapshotModel, TeamModel)
+            .join(TeamModel, TeamModel.id == TeamRankSnapshotModel.team_id)
+            .where(TeamRankSnapshotModel.as_of_date == snapshot_date)
+        )
         rows = (await session.execute(stmt.order_by(TeamRankSnapshotModel.rank))).all()
+    data_age_days = (date_ - snapshot_date).days if date_ and snapshot_date else 0
     return {
-        "asOfDate": (date_ or (rows[0][0].as_of_date if rows else None)),
+        "asOfDate": snapshot_date,
         "rankings": [
             {
                 "rank": rank.rank,
@@ -66,6 +80,11 @@ async def rankings(
             }
             for rank, team in rows
         ],
+        "meta": {
+            "requestedDate": date_,
+            "stale": data_age_days > 0,
+            "dataAgeDays": data_age_days,
+        },
     }
 
 
@@ -142,21 +161,29 @@ async def game_details(game_id: int, request: Request) -> dict:
                 .where(GamePitcherRecordModel.game_id == game_id)
             )
         ).all()
+    pitchers = [
+        {
+            "team": team.code,
+            "name": record.player_name,
+            "appearance": record.appearance,
+            "result": record.result,
+            "innings": record.innings,
+            "pitches": record.pitches,
+            "win": _pitcher_result(record.stats, "승", "win"),
+            "loss": _pitcher_result(record.stats, "패", "loss"),
+            "save": _pitcher_result(record.stats, "세", "save"),
+            "hold": _pitcher_result(record.stats, "홀드", "hold"),
+            "stats": record.stats,
+        }
+        for record, team in rows
+    ]
     return {
         "gameId": game_id,
         "decisiveHit": detail.decisive_hit_text if detail else None,
-        "pitchers": [
-            {
-                "team": team.code,
-                "name": record.player_name,
-                "appearance": record.appearance,
-                "result": record.result,
-                "innings": record.innings,
-                "pitches": record.pitches,
-                "stats": record.stats,
-            }
-            for record, team in rows
-        ],
+        "winningPitcher": next((pitcher["name"] for pitcher in pitchers if pitcher["win"]), None),
+        "losingPitcher": next((pitcher["name"] for pitcher in pitchers if pitcher["loss"]), None),
+        "savePitcher": next((pitcher["name"] for pitcher in pitchers if pitcher["save"]), None),
+        "pitchers": pitchers,
     }
 
 

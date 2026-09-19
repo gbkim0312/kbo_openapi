@@ -5,7 +5,14 @@ from fastapi import APIRouter, Query, Request
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.adapters.inbound.api.schemas.game import GameOut, ScoreOut, TeamOut
+from app.adapters.inbound.api.schemas.game import (
+    ErrorResponseOut,
+    GameListOut,
+    GameOut,
+    LatestResultsOut,
+    ScoreOut,
+    TeamOut,
+)
 from app.adapters.outbound.persistence.models.game import GameModel
 from app.domain.exceptions import GameNotFoundError
 from app.infrastructure.config import settings
@@ -67,7 +74,7 @@ def _stale(games: list[GameModel], refresh_seconds: int) -> bool:
     )
 
 
-@router.get("/games")
+@router.get("/games", response_model=GameListOut | ErrorResponseOut)
 async def get_games(
     request: Request,
     date_: Annotated[date | None, Query(alias="date")] = None,
@@ -128,7 +135,7 @@ async def get_games(
     }
 
 
-@router.get("/games/{game_id}")
+@router.get("/games/{game_id}", response_model=GameOut)
 async def get_game(game_id: int, request: Request) -> dict:
     stmt = (
         select(GameModel)
@@ -142,7 +149,7 @@ async def get_game(game_id: int, request: Request) -> dict:
     return output(game).model_dump(by_alias=True)
 
 
-@router.get("/results/latest")
+@router.get("/results/latest", response_model=LatestResultsOut)
 async def latest_results(
     request: Request,
     date_: Annotated[date | None, Query(alias="date")] = None,

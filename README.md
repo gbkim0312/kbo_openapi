@@ -20,6 +20,8 @@ KBO 공식 일정 응답 → 수집/정규화 → PostgreSQL → REST API / Swag
 - KBO 상세 스코어보드 실패 시 네이버 스포츠 실시간 스코어 fallback
 - Swagger UI 및 공개 조회 API
 
+잔여 개선사항과 우선순위는 [`개선사항.md`](개선사항.md)에 정리되어 있습니다.
+
 ## 시작 전 준비
 
 가장 간단한 실행 방법은 Docker Desktop입니다.
@@ -109,10 +111,10 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 공개 | `GET` | `/api/v1/games` | `date` 또는 `from`·`to`, `team`, `status`, `leagueType`, `limit`, `cursor` | 경기 목록. 기간은 최대 31일이며 `date`와 기간 조건은 함께 사용할 수 없음 |
 | 공개 | `GET` | `/api/v1/games/{gameId}` | 내부 경기 ID | 단일 경기 |
 | 공개 | `GET` | `/api/v1/results/latest` | `date`, `team`, `limit` | 최신 종료 경기. `date`로 특정 날짜의 종료 경기만 조회 가능 |
-| 공개 | `GET` | `/api/v1/rankings` | `date`(선택) | 팀 순위, 승차, 최근 10경기, 연승·연패 |
+| 공개 | `GET` | `/api/v1/rankings` | `date`(선택) | 팀 순위, 승차, 최근 10경기, 연승·연패. 요청일 이전 최신 스냅샷 fallback |
 | 공개 | `GET` | `/api/v1/player-stats` | `season`(필수), `role`, `team`, `limit` | 시즌 타자·투수 기록. `role`: `hitter` 또는 `pitcher` |
 | 공개 | `GET` | `/api/v1/awards` | `season`(선택) | KBO 공식 시즌 MVP |
-| 공개 | `GET` | `/api/v1/games/{gameId}/details` | 내부 경기 ID | 결승타와 투수별 경기 기록 |
+| 공개 | `GET` | `/api/v1/games/{gameId}/details` | 내부 경기 ID | 결승타와 투수별 경기 기록, 승·패·세이브·홀드 표준 필드 |
 | 공개 | `GET` | `/api/v1/games/{gameId}/lineups` | 내부 경기 ID | 최신 수집 라인업, 선발투수, 타순·포지션·WAR·확정 여부 |
 | 공개 | `GET` | `/api/v1/games/{gameId}/analysis` | 내부 경기 ID | KBO 게임센터의 팀 비교·핵심선수 프리뷰 분석 |
 | 내부 | `POST` | `/internal/v1/collections/all` | `{"targetDate":"YYYY-MM-DD"}` | 날짜별 경기, 시즌 순위·선수 기록·MVP, 종료 경기 상세 기록을 순차 수집 |
@@ -122,6 +124,27 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 내부 | `POST` | `/internal/v1/games/{gameId}/preview/collect` | 내부 경기 ID | 라인업과 공식 프리뷰 분석 수집 |
 
 `/api/v1/games`의 `status`는 `scheduled`, `pre_game`, `live`, `delayed`, `suspended`, `final`, `cancelled`, `postponed`, `unknown`으로 제공합니다. 기존 내부 값인 `in_progress`·`completed`도 조회 필터에서 호환됩니다. `score`는 경기 전 `null`, 무득점은 `0`입니다. `cursor`에는 이전 응답의 `meta.nextCursor`를 전달합니다. 잘못된 날짜·기간·페이지 크기는 HTTP 422를, 잘못된 내부 API 토큰은 HTTP 401을 반환합니다.
+
+`score`에는 `away`·`home` 총점 외에 수집된 경우 `innings`(이닝별 득점), `hits`(안타), `errors`(실책), `walks`(볼넷)가 포함됩니다. `scoreboardSource`는 상세 스코어보드 출처이며 `kbo-scoreboard` 또는 `naver-sports`입니다. 데이터 공급자에 따라 상세 항목이 아직 없으면 해당 값은 `null`입니다.
+
+`/api/v1/rankings?date=YYYY-MM-DD`에 해당 날짜의 순위가 없으면 요청일 이전의 가장 최근 스냅샷을 반환합니다. 응답의 `asOfDate`는 실제 순위 기준일이며, `meta.stale`과 `meta.dataAgeDays`로 지연 여부를 확인할 수 있습니다.
+
+```json
+{
+  "score": {
+    "away": 1,
+    "home": 2,
+    "innings": [
+      {"inning": 1, "away": 0, "home": 0},
+      {"inning": 2, "away": 1, "home": 2}
+    ],
+    "hits": {"away": 4, "home": 4},
+    "errors": {"away": 0, "home": 1},
+    "walks": {"away": 2, "home": 3},
+    "scoreboardSource": "naver-sports"
+  }
+}
+```
 
 ## API 사용 예시
 

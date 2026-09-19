@@ -56,32 +56,42 @@ class CollectLiveGameDataUseCase:
     async def collect_live_details(self, target_date: date) -> dict[str, int]:
         now = datetime.now(UTC)
         async with self.sessions() as session:
-            game_ids = list(
-                await session.scalars(
-                    select(GameModel.id).where(
+            game_rows = (
+                await session.execute(
+                    select(GameModel.id, GameModel.status).where(
                         GameModel.game_date == target_date,
                         GameModel.status.in_(
-                            ("scheduled", "pre_game", "in_progress", "delayed", "suspended")
+                            (
+                                "scheduled",
+                                "pre_game",
+                                "in_progress",
+                                "delayed",
+                                "suspended",
+                                "completed",
+                            )
                         ),
                         GameModel.scheduled_at.is_not(None),
                         GameModel.scheduled_at <= now,
                     )
                 )
-            )
+            ).all()
         collected = failed = 0
-        for game_id in game_ids:
+        for game_id, status in game_rows:
             scoreboard_ok = False
             try:
                 scoreboard_ok = await self._collect_scoreboard(game_id)
             except Exception:
                 pass
+            if status == "completed":
+                collected += 1 if scoreboard_ok else 0
+                continue
             try:
                 await self.records.collect_game_details(game_id)
                 collected += 1 if scoreboard_ok else 0
             except Exception:
                 if not scoreboard_ok:
                     failed += 1
-        return {"requested": len(game_ids), "collected": collected, "failed": failed}
+        return {"requested": len(game_rows), "collected": collected, "failed": failed}
 
     async def _collect_scoreboard(self, game_id: int) -> bool:
         async with self.sessions() as session:

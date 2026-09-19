@@ -33,6 +33,8 @@ def create_scheduler(
             )
         else:
             await use_case.execute(target_date)
+        if live_game_use_case:
+            await live_game_use_case.collect_live_details(target_date)
 
     async def collect_today_and_live_details() -> None:
         target_date = datetime.now(SEOUL).date()
