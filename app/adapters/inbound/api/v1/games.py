@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -38,6 +38,15 @@ def output(game: GameModel) -> GameOut:
         revision=game.revision,
         lastCollectedAt=game.last_collected_at,
         updatedAt=game.updated_at,
+    )
+
+
+def _stale(games: list[GameModel], refresh_seconds: int) -> bool:
+    now = datetime.now(UTC)
+    return any(
+        game.last_collected_at
+        and (now - game.last_collected_at).total_seconds() > refresh_seconds
+        for game in games
     )
 
 
@@ -97,7 +106,7 @@ async def get_games(
             "fetchedAt": max((g.last_collected_at for g in games), default=None),
             "source": "kbo-live" if any(g.status == "in_progress" for g in games) else "kbo-http",
             "refreshIntervalSeconds": settings.kbo_refresh_live_seconds,
-            "stale": False,
+            "stale": _stale(games, settings.kbo_refresh_live_seconds),
         },
     }
 
@@ -143,7 +152,7 @@ async def latest_results(
         "games": [output(game).model_dump(by_alias=True) for game in games],
         "meta": {
             "fetchedAt": fetched_at,
-            "stale": False,
+            "stale": _stale(games, settings.kbo_refresh_idle_seconds),
             "source": "kbo-http",
             "refreshIntervalSeconds": settings.kbo_refresh_idle_seconds,
         },
