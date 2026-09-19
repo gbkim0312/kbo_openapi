@@ -31,3 +31,4 @@ def test_treats_zero_zero_lineup_placeholder_as_pre_game() -> None:
 
     assert len(games) == 1
     assert games[0].status is GameStatus.PRE_GAME
+    assert games[0].away_score is None and games[0].home_score is None

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from dataclasses import replace
 from datetime import date
 
@@ -12,6 +13,7 @@ from app.adapters.outbound.sources.exceptions import (
 )
 from app.application.dto.source_game import SourceGame
 from app.application.ports.outbound.game_source import GameSource
+from app.domain.enums.game_status import GameStatus
 from app.infrastructure.config import Settings
 
 
@@ -91,11 +93,11 @@ class KboHttpSource(GameSource):
         raise SourceTransportError("HTTP retries exhausted")
 
     async def _fetch_game_ids(self, client: httpx.AsyncClient, target_date: date) -> dict:
-        """Read game-center IDs, which KBO omits from some schedule rows before a relay exists."""
+        """Read game-center identity and live state for the target date."""
         try:
             response = await client.post(
                 f"{self.config.kbo_base_url}/ws/Main.asmx/GetKboGameList",
-                data={
+                json={
                     "leId": "1",
                     "srId": "0,1,3,4,5,6,7,8,9",
                     "date": target_date.strftime("%Y%m%d"),
@@ -103,14 +105,19 @@ class KboHttpSource(GameSource):
                 headers={
                     "Referer": f"{self.config.kbo_base_url}/Schedule/GameCenter/Main.aspx",
                     "X-Requested-With": "XMLHttpRequest",
+                    "Content-Type": "application/json; charset=UTF-8",
                 },
             )
             response.raise_for_status()
-            rows = response.json().get("game", [])
+            # KBO occasionally appends an HTML error page after a valid JSON body.
+            body = response.text
+            html_index = body.lower().find("<!doctype")
+            payload = json.loads(body[:html_index] if html_index >= 0 else body)
+            rows = payload.get("game", [])
         except (httpx.HTTPError, ValueError, AttributeError):
             return {}
         return {
-            (row["AWAY_ID"], row["HOME_ID"]): row["G_ID"]
+            (row["AWAY_ID"], row["HOME_ID"]): row
             for row in rows
             if isinstance(row, dict)
             and row.get("AWAY_ID")
@@ -123,9 +130,15 @@ class KboHttpSource(GameSource):
     ) -> list[SourceGame]:
         result: list[SourceGame] = []
         for game in games:
-            game_id = game.source_game_id or game_ids.get(
-                (game.away_team_code, game.home_team_code)
-            )
+            live = game_ids.get((game.away_team_code, game.home_team_code))
+            # Keep accepting the old string mapping for unit callers and
+            # deployments that only provide game-center IDs.
+            if isinstance(live, dict):
+                game_id = game.source_game_id or live.get("G_ID")
+            else:
+                game_id = game.source_game_id or live
+            if isinstance(live, dict):
+                game = self._apply_live_state(game, live)
             if game_id and game_id != game.source_game_id:
                 source_url = (
                     f"{self.config.kbo_base_url}/Schedule/GameCenter/Main.aspx?"
@@ -135,3 +148,36 @@ class KboHttpSource(GameSource):
             else:
                 result.append(game)
         return result
+
+    @staticmethod
+    def _apply_live_state(game: SourceGame, live: dict[str, object]) -> SourceGame:
+        """Apply only explicit game-center state; never infer live from 0:0."""
+        status = game.status
+        source_status_text = game.source_status_text
+        cancel_code = str(live.get("CANCEL_SC_ID") or "0")
+        if cancel_code != "0":
+            status, source_status_text = GameStatus.CANCELED, str(
+                live.get("CANCEL_SC_NM") or "취소"
+            )
+        elif str(live.get("GAME_RESULT_CK") or "0") == "1":
+            status, source_status_text = GameStatus.COMPLETED, "경기종료"
+        elif str(live.get("GAME_STATE_SC") or "") == "2":
+            status, source_status_text = GameStatus.IN_PROGRESS, "경기중"
+
+        def score(key: str) -> int | None:
+            value = live.get(key)
+            return int(value) if value is not None and str(value).strip().isdigit() else None
+
+        inning = game.inning
+        inning_number = live.get("GAME_INN_NO")
+        inning_side = str(live.get("GAME_TB_SC_NM") or "").strip()
+        if inning_number not in (None, "") and str(inning_number).isdigit():
+            inning = f"{inning_number}회{inning_side}" if inning_side else f"{inning_number}회"
+        return replace(
+            game,
+            status=status,
+            source_status_text=source_status_text,
+            away_score=score("T_SCORE_CN"),
+            home_score=score("B_SCORE_CN"),
+            inning=inning,
+        )

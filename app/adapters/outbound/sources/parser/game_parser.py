@@ -86,6 +86,8 @@ class KboScheduleParser:
         away_score, home_score = (numeric[0], numeric[1]) if len(numeric) == 2 else (None, None)
         note = values.get("cell_8", "").strip()
         status = self._status(note, away_score, home_score)
+        if status is GameStatus.PRE_GAME and away_score == 0 and home_score == 0:
+            away_score, home_score = None, None
         scheduled_at = self._scheduled_at(values.get("time", ""), game_date)
         source_game_id, source_url = self._game_link(values.get("relay", ""))
         return SourceGame(

@@ -32,3 +32,4 @@ class GameOut(BaseModel):
     inning: str | None
     revision: int
     last_collected_at: datetime = Field(alias="lastCollectedAt")
+    updated_at: datetime = Field(alias="updatedAt")

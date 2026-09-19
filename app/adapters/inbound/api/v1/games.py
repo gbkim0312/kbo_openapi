@@ -12,6 +12,12 @@ from app.infrastructure.config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["games"])
 
+_API_STATUS = {
+    "in_progress": "live",
+    "completed": "final",
+}
+_INTERNAL_STATUS = {value: key for key, value in _API_STATUS.items()}
+
 
 def output(game: GameModel) -> GameOut:
     return GameOut(
@@ -23,7 +29,7 @@ def output(game: GameModel) -> GameOut:
         gameDate=game.game_date,
         scheduledAt=game.scheduled_at,
         stadium=game.stadium,
-        status=game.status,
+        status=_API_STATUS.get(game.status, game.status),
         sourceStatusText=game.source_status_text,
         awayTeam=TeamOut(code=game.away_team.code, name=game.away_team.name),
         homeTeam=TeamOut(code=game.home_team.code, name=game.home_team.name),
@@ -31,6 +37,7 @@ def output(game: GameModel) -> GameOut:
         inning=game.inning,
         revision=game.revision,
         lastCollectedAt=game.last_collected_at,
+        updatedAt=game.updated_at,
     )
 
 
@@ -65,7 +72,7 @@ async def get_games(
     if team:
         clauses.append(or_(GameModel.away_team.has(code=team), GameModel.home_team.has(code=team)))
     if status:
-        clauses.append(GameModel.status == status)
+        clauses.append(GameModel.status == _INTERNAL_STATUS.get(status, status))
     if league_type:
         clauses.append(GameModel.league_type == league_type)
     if cursor:
@@ -87,6 +94,9 @@ async def get_games(
             "count": len(games),
             "nextCursor": next_cursor,
             "collectedAt": max((g.last_collected_at for g in games), default=None),
+            "fetchedAt": max((g.last_collected_at for g in games), default=None),
+            "source": "kbo-live" if any(g.status == "in_progress" for g in games) else "kbo-http",
+            "refreshIntervalSeconds": settings.kbo_refresh_live_seconds,
             "stale": False,
         },
     }

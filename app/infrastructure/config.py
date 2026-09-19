@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,9 +20,30 @@ class Settings(BaseSettings):
     raw_snapshot_enabled: bool = True
     raw_snapshot_max_bytes: int = 5_242_880
     scheduler_enabled: bool = True
+    kbo_refresh_idle_seconds: int = 300
+    kbo_refresh_pre_game_seconds: int = 60
+    kbo_refresh_live_seconds: int = 15
+    kbo_refresh_late_game_seconds: int = 10
+    kbo_refresh_failure_backoff_max_seconds: int = 120
     max_query_range_days: int = 31
     default_page_size: int = 50
     max_page_size: int = 200
+
+    @field_validator(
+        "kbo_refresh_idle_seconds",
+        "kbo_refresh_pre_game_seconds",
+        "kbo_refresh_live_seconds",
+        "kbo_refresh_late_game_seconds",
+        "kbo_refresh_failure_backoff_max_seconds",
+        mode="before",
+    )
+    @classmethod
+    def positive_refresh_seconds(cls, value: object) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 300
+        return parsed if parsed > 0 else 300
 
 
 settings = Settings()
