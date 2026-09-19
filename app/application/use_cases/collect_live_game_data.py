@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -54,11 +54,17 @@ class CollectLiveGameDataUseCase:
         }
 
     async def collect_live_details(self, target_date: date) -> dict[str, int]:
+        now = datetime.now(UTC)
         async with self.sessions() as session:
             game_ids = list(
                 await session.scalars(
                     select(GameModel.id).where(
-                        GameModel.game_date == target_date, GameModel.status == "in_progress"
+                        GameModel.game_date == target_date,
+                        GameModel.status.in_(
+                            ("scheduled", "pre_game", "in_progress", "delayed", "suspended")
+                        ),
+                        GameModel.scheduled_at.is_not(None),
+                        GameModel.scheduled_at <= now,
                     )
                 )
             )
