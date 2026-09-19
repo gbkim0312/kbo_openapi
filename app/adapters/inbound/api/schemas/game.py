@@ -12,6 +12,10 @@ class TeamOut(BaseModel):
 class ScoreOut(BaseModel):
     away: int | None
     home: int | None
+    innings: dict[str, list[int | None]] | None = None
+    hits: dict[str, int | None] | None = None
+    errors: dict[str, int | None] | None = None
+    walks: dict[str, int | None] | None = None
 
 
 class GameOut(BaseModel):

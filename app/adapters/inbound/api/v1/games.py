@@ -138,4 +138,13 @@ async def latest_results(
         stmt = stmt.where(GameModel.game_date == date_)
     async with request.app.state.session_factory() as session:
         games = (await session.scalars(stmt)).all()
-    return {"games": [output(game).model_dump(by_alias=True) for game in games]}
+    fetched_at = max((game.last_collected_at for game in games), default=None)
+    return {
+        "games": [output(game).model_dump(by_alias=True) for game in games],
+        "meta": {
+            "fetchedAt": fetched_at,
+            "stale": False,
+            "source": "kbo-http",
+            "refreshIntervalSeconds": settings.kbo_refresh_idle_seconds,
+        },
+    }

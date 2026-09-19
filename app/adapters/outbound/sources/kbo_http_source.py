@@ -58,7 +58,7 @@ class KboHttpSource(GameSource):
                     game_ids = await self._fetch_game_ids(client, target_date)
                 if response.status_code in {408, 429, 500, 502, 503, 504}:
                     if attempt + 1 < self.config.kbo_max_retries:
-                        await asyncio.sleep(float(response.headers.get("Retry-After", 2**attempt)))
+                        await asyncio.sleep(self._retry_delay(attempt, response))
                         continue
                     raise SourceTransportError(f"HTTP {response.status_code}")
                 response.raise_for_status()
@@ -89,8 +89,16 @@ class KboHttpSource(GameSource):
             except (httpx.TimeoutException, httpx.NetworkError) as error:
                 if attempt + 1 == self.config.kbo_max_retries:
                     raise SourceTransportError(str(error)) from error
-                await asyncio.sleep(2**attempt)
+                await asyncio.sleep(self._retry_delay(attempt))
         raise SourceTransportError("HTTP retries exhausted")
+
+    def _retry_delay(self, attempt: int, response: httpx.Response | None = None) -> float:
+        retry_after = response.headers.get("Retry-After") if response else None
+        try:
+            requested = float(retry_after) if retry_after else 30.0 * (2**attempt)
+        except ValueError:
+            requested = 30.0 * (2**attempt)
+        return min(requested, float(self.config.kbo_refresh_failure_backoff_max_seconds))
 
     async def _fetch_game_ids(self, client: httpx.AsyncClient, target_date: date) -> dict:
         """Read game-center identity and live state for the target date."""
