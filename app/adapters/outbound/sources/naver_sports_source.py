@@ -93,6 +93,10 @@ class NaverSportsSource:
             return None
 
         players: dict[str, dict[str, str | None]] = {}
+        batters_by_order: dict[str, dict[str, dict[str, str | None]]] = {
+            "home": {},
+            "away": {},
+        }
         for side, team_code, key in (
             ("home", source_game_id[10:12], "homeLineup"),
             ("away", source_game_id[8:10], "awayLineup"),
@@ -110,11 +114,17 @@ class NaverSportsSource:
                         "team": team_code or None,
                         "side": side,
                     }
+                    if group == "batter" and player.get("batOrder") is not None:
+                        batters_by_order[side][str(player["batOrder"])] = players[
+                            str(player["pcode"])
+                        ]
 
-        def player(value: object) -> dict[str, str | None] | None:
+        def player(value: object, side: str | None = None, runner: bool = False):
             key = str(value or "")
             if not key or key == "0":
                 return None
+            if runner and side and key in batters_by_order[side]:
+                return batters_by_order[side][key]
             return players.get(key, {"id": key, "name": None, "team": None, "side": None})
 
         def number(key: str) -> int | None:
@@ -122,6 +132,7 @@ class NaverSportsSource:
             return int(str(value)) if str(value or "").isdigit() else None
 
         inning = NaverSportsSource._parse_inning(relay)
+        offense_side = "home" if str(relay.get("homeOrAway") or "0") == "1" else "away"
         return {
             "pitcher": player(state.get("pitcher")),
             "batter": player(state.get("batter")),
@@ -131,9 +142,9 @@ class NaverSportsSource:
                 "outs": number("out"),
             },
             "runners": {
-                "first": player(state.get("base1")),
-                "second": player(state.get("base2")),
-                "third": player(state.get("base3")),
+                "first": player(state.get("base1"), offense_side, runner=True),
+                "second": player(state.get("base2"), offense_side, runner=True),
+                "third": player(state.get("base3"), offense_side, runner=True),
             },
             "source": "naver-sports",
             "relayNumber": relay.get("no"),
