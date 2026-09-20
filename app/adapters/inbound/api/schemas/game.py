@@ -17,6 +17,12 @@ class InningScoreOut(BaseModel):
     home: int | None
 
 
+class LiveInningOut(BaseModel):
+    number: int
+    half: str
+    display: str
+
+
 class ScoreOut(BaseModel):
     away: int | None
     home: int | None
@@ -25,6 +31,9 @@ class ScoreOut(BaseModel):
     errors: dict[str, int | None] | None = None
     walks: dict[str, int | None] | None = None
     scoreboard_source: str | None = Field(default=None, alias="scoreboardSource")
+    score_updated_at: datetime | None = Field(default=None, alias="scoreUpdatedAt")
+    live_fetched_at: datetime | None = Field(default=None, alias="liveFetchedAt")
+    live_stale: bool | None = Field(default=None, alias="liveStale")
     live: "LiveStateOut | None" = None
 
 
@@ -50,11 +59,14 @@ class LiveRunnersOut(BaseModel):
 class LiveStateOut(BaseModel):
     pitcher: PlayerRefOut | None = None
     batter: PlayerRefOut | None = None
-    count: LiveCountOut
+    count: LiveCountOut | None = None
     runners: LiveRunnersOut
     source: str
     relay_number: int | None = Field(default=None, alias="relayNumber")
-    inning: int | None = None
+    play_sequence: int | None = Field(default=None, alias="playSequence")
+    inning: LiveInningOut | None = None
+    updated_at: datetime | None = Field(default=None, alias="updatedAt")
+    stale: bool = False
 
 
 class GameOut(BaseModel):

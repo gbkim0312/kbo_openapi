@@ -56,3 +56,10 @@ def test_parses_naver_live_count_and_runners() -> None:
     assert parsed["pitcher"]["name"] == "투수"
     assert parsed["batter"]["name"] == "타자"
     assert parsed["runners"]["third"]["name"] == "주자"
+    assert parsed["inning"] == {"number": 4, "half": "top", "display": "4회초"}
+
+
+def test_parses_inning_half_from_relay_title() -> None:
+    assert NaverSportsSource._parse_inning(
+        {"textRelays": [{"title": "9회말 KIA 공격"}], "inn": 9}
+    ) == {"number": 9, "half": "bottom", "display": "9회말"}

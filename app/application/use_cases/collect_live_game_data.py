@@ -109,10 +109,38 @@ class CollectLiveGameDataUseCase:
             )
         if scoreboard is None and live_state is None:
             return False
+        collected_at = datetime.now(UTC)
+        collected_at_text = collected_at.isoformat()
         if scoreboard is None:
-            scoreboard = {"source": "naver-sports"}
+            scoreboard = dict(game.scoreboard or {})
+            scoreboard.setdefault("source", "naver-sports")
+        else:
+            scoreboard = dict(scoreboard)
+            scoreboard["scoreUpdatedAt"] = collected_at_text
         if live_state is not None:
-            scoreboard = {**scoreboard, "liveState": live_state}
+            live_state = {**live_state, "updatedAt": collected_at_text, "stale": False}
+            if game.inning and not self._same_inning(game.inning, live_state):
+                live_state.update(
+                    {
+                        "inning": self._inning_from_display(game.inning),
+                        "pitcher": None,
+                        "batter": None,
+                        "count": None,
+                        "runners": {"first": None, "second": None, "third": None},
+                        "stale": True,
+                    }
+                )
+            scoreboard["liveState"] = live_state
+            scoreboard["liveFetchedAt"] = collected_at_text
+        elif not self._same_inning(game.inning, (game.scoreboard or {}).get("liveState")):
+            # A new half-inning without a fresh relay must not expose the prior
+            # half's batter, runners, or count.
+            scoreboard["liveState"] = None
+        elif scoreboard.get("liveState"):
+            scoreboard["liveState"] = {
+                **scoreboard["liveState"],
+                "stale": True,
+            }
         async with self.sessions() as session, session.begin():
             game = await session.get(GameModel, game_id)
             if game is not None:
@@ -120,3 +148,22 @@ class CollectLiveGameDataUseCase:
                 game.updated_at = datetime.now(UTC)
                 return True
         return False
+
+    @staticmethod
+    def _same_inning(game_inning: str | None, live_state: object) -> bool:
+        if not game_inning or not isinstance(live_state, dict):
+            return True
+        inning = live_state.get("inning")
+        if isinstance(inning, dict):
+            return inning.get("display") == game_inning
+        return inning == game_inning
+
+    @staticmethod
+    def _inning_from_display(display: str) -> dict[str, int | str] | None:
+        if len(display) < 3 or not display.endswith(("회초", "회말")):
+            return None
+        number = display[:-2]
+        if not number.isdigit():
+            return None
+        half = "bottom" if display.endswith("회말") else "top"
+        return {"number": int(number), "half": half, "display": display}

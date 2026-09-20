@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+import re
+from datetime import UTC, datetime
 
 import httpx
 
@@ -78,7 +79,7 @@ class NaverSportsSource:
             "currentInning": game.get("currentInning"),
             "source": "naver-sports",
             "sourceGameId": game.get("gameId"),
-            "fetchedAt": datetime.now().isoformat(),
+            "fetchedAt": datetime.now(UTC).isoformat(),
             "startingPitchers": {
                 "away": game.get("awayStarterName"),
                 "home": game.get("homeStarterName"),
@@ -120,6 +121,7 @@ class NaverSportsSource:
             value = state.get(key)
             return int(str(value)) if str(value or "").isdigit() else None
 
+        inning = NaverSportsSource._parse_inning(relay)
         return {
             "pitcher": player(state.get("pitcher")),
             "batter": player(state.get("batter")),
@@ -135,8 +137,37 @@ class NaverSportsSource:
             },
             "source": "naver-sports",
             "relayNumber": relay.get("no"),
-            "inning": relay.get("inn"),
+            "playSequence": relay.get("no"),
+            "inning": inning,
         }
+
+    @staticmethod
+    def _parse_inning(relay: dict) -> dict[str, int | str] | None:
+        relays = relay.get("textRelays")
+        if isinstance(relays, list):
+            for item in reversed(relays):
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title") or "")
+                match = re.search(r"(\d+)회\s*(초|말)", title)
+                if match:
+                    half = "top" if match.group(2) == "초" else "bottom"
+                    return {
+                        "number": int(match.group(1)),
+                        "half": half,
+                        "display": f"{match.group(1)}회{match.group(2)}",
+                    }
+        number = relay.get("inn")
+        if str(number).isdigit():
+            side = str(relay.get("homeOrAway") or "0")
+            half = "bottom" if side == "1" else "top"
+            korean_half = "말" if half == "bottom" else "초"
+            return {
+                "number": int(str(number)),
+                "half": half,
+                "display": f"{number}회{korean_half}",
+            }
+        return None
 
     @staticmethod
     def _inning_values(value: object) -> list[int | None]:

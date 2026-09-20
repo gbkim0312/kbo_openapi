@@ -127,7 +127,22 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 
 `score`에는 `away`·`home` 총점 외에 수집된 경우 `innings`(이닝별 득점), `hits`(안타), `errors`(실책), `walks`(볼넷)가 포함됩니다. `scoreboardSource`는 상세 스코어보드 출처이며 `kbo-scoreboard` 또는 `naver-sports`입니다. 데이터 공급자에 따라 상세 항목이 아직 없으면 해당 값은 `null`입니다.
 
-경기중에는 `score.live`에 현재 투수·타자, 볼·스트라이크·아웃 카운트, 1·2·3루 주자 정보를 포함할 수 있습니다. 선수 ID와 이름이 원본에서 확인되지 않는 경우 ID만 제공되며, 경기 교대·중단·종료 시 `live`가 `null`이거나 일부 필드가 비어 있을 수 있습니다.
+경기중에는 `score.live`에 현재 투수·타자, 볼·스트라이크·아웃 카운트, 1·2·3루 주자 정보를 포함할 수 있습니다. `score.live.inning`은 `number`, `half`(`top`/`bottom`), `display`로 구성되며 `playSequence`는 relay 순번입니다. `score.liveFetchedAt`과 `score.liveStale`은 라이브 데이터의 별도 신선도 정보입니다. 선수 ID와 이름이 원본에서 확인되지 않는 경우 ID만 제공되며, 공수교대 직후 새 라이브 데이터가 없으면 이전 반 이닝의 타자·주자를 재사용하지 않습니다.
+
+```json
+{
+  "live": {
+    "inning": {"number": 9, "half": "bottom", "display": "9회말"},
+    "playSequence": 1842,
+    "pitcher": {"id": "67143", "name": "투수명", "team": "NC"},
+    "batter": null,
+    "count": null,
+    "runners": {"first": null, "second": null, "third": null},
+    "updatedAt": "2026-09-20T08:20:10Z",
+    "stale": false
+  }
+}
+```
 
 `/api/v1/rankings?date=YYYY-MM-DD`에 해당 날짜의 순위가 없으면 요청일 이전의 가장 최근 스냅샷을 반환합니다. 응답의 `asOfDate`는 실제 순위 기준일이며, `meta.stale`과 `meta.dataAgeDays`로 지연 여부를 확인할 수 있습니다.
 
