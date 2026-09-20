@@ -154,6 +154,18 @@ class NaverSportsSource:
 
     @staticmethod
     def _parse_inning(relay: dict) -> dict[str, int | str] | None:
+        # The relay title can lag behind currentGameState during a side change.
+        # Prefer the machine-readable inning and attack-side fields first.
+        number = relay.get("inn")
+        side = relay.get("homeOrAway")
+        if str(number).isdigit() and str(side) in {"0", "1"}:
+            half = "bottom" if str(side) == "1" else "top"
+            korean_half = "말" if half == "bottom" else "초"
+            return {
+                "number": int(str(number)),
+                "half": half,
+                "display": f"{number}회{korean_half}",
+            }
         relays = relay.get("textRelays")
         if isinstance(relays, list):
             for item in reversed(relays):
@@ -168,7 +180,6 @@ class NaverSportsSource:
                         "half": half,
                         "display": f"{match.group(1)}회{match.group(2)}",
                     }
-        number = relay.get("inn")
         if str(number).isdigit():
             side = str(relay.get("homeOrAway") or "0")
             half = "bottom" if side == "1" else "top"

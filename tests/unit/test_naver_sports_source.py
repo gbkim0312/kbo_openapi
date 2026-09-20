@@ -63,3 +63,13 @@ def test_parses_inning_half_from_relay_title() -> None:
     assert NaverSportsSource._parse_inning(
         {"textRelays": [{"title": "9회말 KIA 공격"}], "inn": 9}
     ) == {"number": 9, "half": "bottom", "display": "9회말"}
+
+
+def test_prefers_current_attack_side_over_lagging_relay_title() -> None:
+    assert NaverSportsSource._parse_inning(
+        {
+            "inn": 9,
+            "homeOrAway": "1",
+            "textRelays": [{"title": "9회초 KIA 공격"}],
+        }
+    ) == {"number": 9, "half": "bottom", "display": "9회말"}
