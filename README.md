@@ -134,7 +134,17 @@ curl -X POST http://localhost:8085/internal/v1/collections \
   "live": {
     "inning": {"number": 9, "half": "bottom", "display": "9회말"},
     "playSequence": 1842,
-    "pitcher": {"id": "67143", "name": "투수명", "team": "NC"},
+    "pitcher": {
+      "id": "67143",
+      "name": "투수명",
+      "team": "NC",
+      "pitchCount": 17,
+      "innings": "1.1",
+      "hits": 2,
+      "runs": 0,
+      "walks": 0,
+      "strikeouts": 2
+    },
     "batter": null,
     "count": null,
     "runners": {"first": null, "second": null, "third": null},

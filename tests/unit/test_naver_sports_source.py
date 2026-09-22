@@ -42,7 +42,18 @@ def test_parses_naver_live_count_and_runners() -> None:
             },
             "homeLineup": {
                 "batter": [{"pcode": "52765", "name": "타자", "batOrder": 1}],
-                "pitcher": [{"pcode": "67143", "name": "투수"}],
+                "pitcher": [
+                    {
+                        "pcode": "67143",
+                        "name": "투수",
+                        "ballCount": 17,
+                        "inn": "1.1",
+                        "hit": 2,
+                        "run": 0,
+                        "bb": 0,
+                        "kk": 2,
+                    }
+                ],
             },
             "awayLineup": {
                 "batter": [{"pcode": "60000", "name": "주자", "batOrder": 3}],
@@ -54,6 +65,8 @@ def test_parses_naver_live_count_and_runners() -> None:
     assert parsed is not None
     assert parsed["count"] == {"balls": 1, "strikes": 2, "outs": 1}
     assert parsed["pitcher"]["name"] == "투수"
+    assert parsed["pitcher"]["pitchCount"] == 17
+    assert parsed["pitcher"]["strikeouts"] == 2
     assert parsed["batter"]["name"] == "타자"
     assert parsed["runners"]["third"]["name"] == "주자"
     assert parsed["inning"] == {"number": 4, "half": "top", "display": "4회초"}

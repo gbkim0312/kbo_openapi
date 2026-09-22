@@ -92,8 +92,8 @@ class NaverSportsSource:
         if not isinstance(state, dict):
             return None
 
-        players: dict[str, dict[str, str | None]] = {}
-        batters_by_order: dict[str, dict[str, dict[str, str | None]]] = {
+        players: dict[str, dict[str, object]] = {}
+        batters_by_order: dict[str, dict[str, dict[str, object]]] = {
             "home": {},
             "away": {},
         }
@@ -114,12 +114,23 @@ class NaverSportsSource:
                         "team": team_code or None,
                         "side": side,
                     }
+                    if group == "pitcher":
+                        players[str(player["pcode"])] |= {
+                            "pitchCount": NaverSportsSource._as_int(player.get("ballCount")),
+                            "innings": player.get("inn"),
+                            "hits": NaverSportsSource._as_int(player.get("hit")),
+                            "runs": NaverSportsSource._as_int(player.get("run")),
+                            "walks": NaverSportsSource._as_int(player.get("bb")),
+                            "strikeouts": NaverSportsSource._as_int(player.get("kk")),
+                        }
                     if group == "batter" and player.get("batOrder") is not None:
                         batters_by_order[side][str(player["batOrder"])] = players[
                             str(player["pcode"])
                         ]
 
-        def player(value: object, side: str | None = None, runner: bool = False):
+        def player(
+            value: object, side: str | None = None, runner: bool = False
+        ) -> dict[str, object] | None:
             key = str(value or "")
             if not key or key == "0":
                 return None
@@ -200,6 +211,11 @@ class NaverSportsSource:
             text = str(item).strip()
             result.append(int(text) if text.isdigit() else None)
         return result
+
+    @staticmethod
+    def _as_int(value: object) -> int | None:
+        text = str(value or "").strip()
+        return int(text) if text.isdigit() else None
 
     @staticmethod
     def _rheb(value: object) -> dict[str, int | None] | None:

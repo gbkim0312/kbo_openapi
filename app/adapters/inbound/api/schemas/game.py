@@ -42,6 +42,12 @@ class PlayerRefOut(BaseModel):
     name: str | None = None
     team: str | None = None
     side: str | None = None
+    pitch_count: int | None = Field(default=None, alias="pitchCount")
+    innings: str | None = None
+    hits: int | None = None
+    runs: int | None = None
+    walks: int | None = None
+    strikeouts: int | None = None
 
 
 class LiveCountOut(BaseModel):
