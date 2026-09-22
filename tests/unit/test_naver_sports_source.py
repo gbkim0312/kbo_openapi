@@ -78,6 +78,11 @@ def test_parses_inning_half_from_relay_title() -> None:
     ) == {"number": 9, "half": "bottom", "display": "9회말"}
 
 
+def test_preserves_zero_pitcher_totals() -> None:
+    assert NaverSportsSource._as_int(0) == 0
+    assert NaverSportsSource._as_int("0") == 0
+
+
 def test_prefers_current_attack_side_over_lagging_relay_title() -> None:
     assert NaverSportsSource._parse_inning(
         {

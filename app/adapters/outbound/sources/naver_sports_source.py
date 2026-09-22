@@ -214,7 +214,9 @@ class NaverSportsSource:
 
     @staticmethod
     def _as_int(value: object) -> int | None:
-        text = str(value or "").strip()
+        if value is None:
+            return None
+        text = str(value).strip()
         return int(text) if text.isdigit() else None
 
     @staticmethod
