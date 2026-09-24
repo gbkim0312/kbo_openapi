@@ -91,3 +91,39 @@ def test_prefers_current_attack_side_over_lagging_relay_title() -> None:
             "textRelays": [{"title": "9회초 KIA 공격"}],
         }
     ) == {"number": 9, "half": "bottom", "display": "9회말"}
+
+
+def test_normalizes_completed_at_bat_and_keeps_raw_text() -> None:
+    parsed = NaverSportsSource._parse_live_state(
+        {
+            "no": 48,
+            "inn": 6,
+            "homeOrAway": "0",
+            "currentGameState": {"pitcher": "1", "batter": "2"},
+            "textRelays": [
+                {
+                    "no": 48,
+                    "inn": 6,
+                    "homeOrAway": "0",
+                    "textOptions": [
+                        {
+                            "seqno": 273,
+                            "type": 13,
+                            "text": "윤준혁 : 우익수 오른쪽 2루타",
+                            "batterRecord": {
+                                "pcode": "50092",
+                                "name": "윤준혁",
+                                "run": 0,
+                                "rbi": 0,
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        "20260924NCKT0",
+    )
+    assert parsed is not None
+    assert parsed["completedAtBats"][-1]["result"] == "double"
+    assert parsed["completedAtBats"][-1]["eventId"] == "20260924NCKT0-48-273"
+    assert parsed["completedAtBats"][-1]["rawText"] == "윤준혁 : 우익수 오른쪽 2루타"

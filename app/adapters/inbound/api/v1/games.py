@@ -6,6 +6,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.adapters.inbound.api.schemas.game import (
+    AtBatEventOut,
     ErrorResponseOut,
     GameListOut,
     GameOut,
@@ -13,6 +14,7 @@ from app.adapters.inbound.api.schemas.game import (
     ScoreOut,
     TeamOut,
 )
+from app.adapters.outbound.persistence.models.at_bat_event import AtBatEventModel
 from app.adapters.outbound.persistence.models.game import GameModel
 from app.domain.exceptions import GameNotFoundError
 from app.infrastructure.config import settings
@@ -47,22 +49,33 @@ def output(game: GameModel) -> GameOut:
             hits={
                 side: (game.scoreboard or {}).get("totals", {}).get(side, {}).get("hits")
                 for side in ("away", "home")
-            } if game.scoreboard else None,
+            }
+            if game.scoreboard
+            else None,
             errors={
                 side: (game.scoreboard or {}).get("totals", {}).get(side, {}).get("errors")
                 for side in ("away", "home")
-            } if game.scoreboard else None,
+            }
+            if game.scoreboard
+            else None,
             walks={
                 side: (game.scoreboard or {}).get("totals", {}).get(side, {}).get("walks")
                 for side in ("away", "home")
-            } if game.scoreboard else None,
+            }
+            if game.scoreboard
+            else None,
             scoreboardSource=(game.scoreboard or {}).get("source") if game.scoreboard else None,
-            scoreUpdatedAt=(game.scoreboard or {}).get("scoreUpdatedAt") if game.scoreboard else None,
+            scoreUpdatedAt=(game.scoreboard or {}).get("scoreUpdatedAt")
+            if game.scoreboard
+            else None,
             liveFetchedAt=(game.scoreboard or {}).get("liveFetchedAt") if game.scoreboard else None,
             liveStale=(game.scoreboard or {}).get("liveState", {}).get("stale")
             if game.scoreboard and isinstance(game.scoreboard.get("liveState"), dict)
             else None,
             live=(game.scoreboard or {}).get("liveState") if game.scoreboard else None,
+            completedAtBat=(game.scoreboard or {}).get("completedAtBat")
+            if game.scoreboard
+            else None,
         ),
         inning=game.inning,
         revision=game.revision,
@@ -74,8 +87,7 @@ def output(game: GameModel) -> GameOut:
 def _stale(games: list[GameModel], refresh_seconds: int) -> bool:
     now = datetime.now(UTC)
     return any(
-        game.last_collected_at
-        and (now - game.last_collected_at).total_seconds() > refresh_seconds
+        game.last_collected_at and (now - game.last_collected_at).total_seconds() > refresh_seconds
         for game in games
     )
 
@@ -153,6 +165,45 @@ async def get_game(game_id: int, request: Request) -> dict:
     if not game:
         raise GameNotFoundError()
     return output(game).model_dump(by_alias=True)
+
+
+@router.get("/games/{game_id}/at-bats", response_model=list[AtBatEventOut])
+async def get_at_bats(
+    game_id: int,
+    request: Request,
+    limit: int = Query(50, ge=1, le=500),
+) -> list[dict]:
+    async with request.app.state.session_factory() as session:
+        game = await session.scalar(select(GameModel).where(GameModel.id == game_id))
+        if game is None:
+            raise GameNotFoundError()
+        rows = (
+            await session.scalars(
+                select(AtBatEventModel)
+                .where(AtBatEventModel.game_id == game_id)
+                .order_by(AtBatEventModel.source_event_no, AtBatEventModel.source_seqno)
+                .limit(limit)
+            )
+        ).all()
+    return [
+        {
+            "eventId": f"{game.source_game_id or game_id}-{row.source_event_no}-{row.source_seqno}",
+            "sourceEventNo": row.source_event_no,
+            "sourceSeqno": row.source_seqno,
+            "inning": row.inning,
+            "half": row.half,
+            "batter": {"id": row.batter_id, "name": row.batter_name, "team": row.team_code},
+            "result": row.result,
+            "resultText": row.result_text,
+            "rawText": row.raw_text,
+            "runs": row.runs,
+            "rbi": row.rbi,
+            "occurredAt": row.occurred_at,
+            "collectedAt": row.collected_at,
+            "source": "naver-sports",
+        }
+        for row in rows
+    ]
 
 
 @router.get("/results/latest", response_model=LatestResultsOut)

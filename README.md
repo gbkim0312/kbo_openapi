@@ -116,6 +116,7 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 | 공개 | `GET` | `/api/v1/awards` | `season`(선택) | KBO 공식 시즌 MVP |
 | 공개 | `GET` | `/api/v1/games/{gameId}/details` | 내부 경기 ID | 결승타와 투수별 경기 기록, 승·패·세이브·홀드 표준 필드 |
 | 공개 | `GET` | `/api/v1/games/{gameId}/lineups` | 내부 경기 ID | 최신 수집 라인업, 선발투수, 타순·포지션·WAR·확정 여부 |
+| 공개 | `GET` | `/api/v1/games/{gameId}/at-bats` | 내부 경기 ID, `limit` | 수집된 완료 타석 결과 이력(중복 제거) |
 | 공개 | `GET` | `/api/v1/games/{gameId}/analysis` | 내부 경기 ID | KBO 게임센터의 팀 비교·핵심선수 프리뷰 분석 |
 | 내부 | `POST` | `/internal/v1/collections/all` | `{"targetDate":"YYYY-MM-DD"}` | 날짜별 경기, 시즌 순위·선수 기록·MVP, 종료 경기 상세 기록을 순차 수집 |
 | 내부 | `POST` | `/internal/v1/collections` | `{"targetDate":"YYYY-MM-DD","force":false}` | 날짜별 경기 일정·결과 수집 |
@@ -128,6 +129,8 @@ curl -X POST http://localhost:8085/internal/v1/collections \
 `score`에는 `away`·`home` 총점 외에 수집된 경우 `innings`(이닝별 득점), `hits`(안타), `errors`(실책), `walks`(볼넷)가 포함됩니다. `scoreboardSource`는 상세 스코어보드 출처이며 `kbo-scoreboard` 또는 `naver-sports`입니다. 데이터 공급자에 따라 상세 항목이 아직 없으면 해당 값은 `null`입니다.
 
 경기중에는 `score.live`에 현재 투수·타자, 볼·스트라이크·아웃 카운트, 1·2·3루 주자 정보를 포함할 수 있습니다. `score.live.inning`은 `number`, `half`(`top`/`bottom`), `display`로 구성되며 `playSequence`는 relay 순번입니다. `score.liveFetchedAt`과 `score.liveStale`은 라이브 데이터의 별도 신선도 정보입니다. 선수 ID와 이름이 원본에서 확인되지 않는 경우 ID만 제공되며, 공수교대 직후 새 라이브 데이터가 없으면 이전 반 이닝의 타자·주자를 재사용하지 않습니다.
+
+완료된 타석은 현재 타석(`score.live`)과 별도로 `score.completedAtBat`에 가장 최근 결과를 제공합니다. 전체 누적 이력은 `GET /api/v1/games/{gameId}/at-bats`에서 조회합니다. 네이버 릴레이의 `no`와 `seqno`를 조합한 `eventId`로 중복을 제거하며, `result`는 프로젝트 표준값(`home_run`, `single`, `double`, `triple`, `walk`, `hit_by_pitch`, `strikeout`, `groundout`, `flyout`, `double_play`, `sacrifice`, `error_reach`, `other`)입니다. 원본에 시각이 없으므로 `occurredAt`은 현재 `null`이고 `collectedAt`에 수집 시각을 기록합니다. `rawText`는 원문 보존 필드입니다.
 
 ```json
 {
@@ -150,6 +153,22 @@ curl -X POST http://localhost:8085/internal/v1/collections \
     "runners": {"first": null, "second": null, "third": null},
     "updatedAt": "2026-09-20T08:20:10Z",
     "stale": false
+  },
+  "completedAtBat": {
+    "eventId": "20260924NCKT0-48-273",
+    "sourceEventNo": 48,
+    "sourceSeqno": 273,
+    "inning": 6,
+    "half": "top",
+    "batter": {"id": "50092", "name": "윤준혁", "team": "NC"},
+    "result": "double",
+    "resultText": "우익수 오른쪽 2루타",
+    "rawText": "윤준혁 : 우익수 오른쪽 2루타",
+    "runs": 0,
+    "rbi": 0,
+    "occurredAt": null,
+    "collectedAt": "2026-09-24T09:20:10Z",
+    "source": "naver-sports"
   }
 }
 ```
@@ -185,6 +204,7 @@ curl 'http://localhost:8085/api/v1/player-stats?season=2026&role=pitcher&limit=2
 
 # 2026-08-04 종료 경기만 조회
 curl 'http://localhost:8085/api/v1/results/latest?date=2026-08-04'
+curl 'http://localhost:8085/api/v1/games/2/at-bats?limit=50'
 
 # 날짜별 경기 수집
 curl -X POST http://localhost:8085/internal/v1/collections \
@@ -235,6 +255,8 @@ docker compose run --rm kbo-worker collect-records
 - 12:00~23:59: 15분마다 미확정 경기의 라인업·공식 프리뷰 분석 수집. 확정 라인업을 받으면 해당 경기의 프리뷰 재수집을 중단
 - 17:00~23:59: 5분마다 당일 경기 상태·점수 수집 및 진행 중 경기의 투수 상세 기록 갱신
 - 17:00~23:59: 기본 15초마다 게임센터 라이브 상태·스코어 스냅샷을 갱신
+
+완료 타석도 같은 라이브 폴링에서 수집하며, 릴레이 응답에 남아 있는 최근 이벤트를 `eventId`로 중복 제거해 PostgreSQL에 누적합니다. 따라서 특정 타석 종료 순간에 단 한 번 호출할 필요는 없지만, 경기 중 폴링을 끄거나 릴레이 보관 범위를 지난 뒤 최초 수집하면 해당 타석을 복구할 수 없습니다.
 
 실시간 수집 주기는 `.env`의 `KBO_REFRESH_*_SECONDS`로 조정할 수 있습니다. 기본값은 대기 300초, 경기 직전 60초, 경기 중 15초, 승부처 10초이며 양의 정수가 아니면 안전한 기본값으로 처리합니다. 환경 변수 변경은 worker 재시작 후 적용됩니다.
 

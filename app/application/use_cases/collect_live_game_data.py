@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.adapters.outbound.persistence.models.at_bat_event import AtBatEventModel
 from app.adapters.outbound.persistence.models.game import GameModel
 from app.adapters.outbound.persistence.models.preview import GameLineupSnapshotModel
 from app.application.use_cases.collect_preview import CollectPreviewUseCase
@@ -116,6 +117,8 @@ class CollectLiveGameDataUseCase:
             scoreboard.setdefault("source", "naver-sports")
         else:
             scoreboard = dict(scoreboard)
+            if game.scoreboard and "completedAtBat" in game.scoreboard:
+                scoreboard.setdefault("completedAtBat", game.scoreboard["completedAtBat"])
             scoreboard["scoreUpdatedAt"] = collected_at_text
         if live_state is not None:
             live_state = {**live_state, "updatedAt": collected_at_text, "stale": False}
@@ -132,6 +135,10 @@ class CollectLiveGameDataUseCase:
                 )
             scoreboard["liveState"] = live_state
             scoreboard["liveFetchedAt"] = collected_at_text
+            completed = live_state.get("completedAtBats")
+            if isinstance(completed, list):
+                if completed:
+                    scoreboard["completedAtBat"] = completed[-1]
         elif not self._same_inning(game.inning, (game.scoreboard or {}).get("liveState")):
             # A new half-inning without a fresh relay must not expose the prior
             # half's batter, runners, or count.
@@ -146,6 +153,47 @@ class CollectLiveGameDataUseCase:
             if game is not None:
                 game.scoreboard = scoreboard
                 game.updated_at = datetime.now(UTC)
+                events = live_state.get("completedAtBats", []) if live_state else []
+                if isinstance(events, list):
+                    for event in events:
+                        if not isinstance(event, dict):
+                            continue
+                        source_no = event.get("sourceEventNo")
+                        source_seq = event.get("sourceSeqno")
+                        if not isinstance(source_no, int) or not isinstance(source_seq, int):
+                            continue
+                        exists = await session.scalar(
+                            select(AtBatEventModel.id).where(
+                                AtBatEventModel.game_id == game_id,
+                                AtBatEventModel.source_event_no == source_no,
+                                AtBatEventModel.source_seqno == source_seq,
+                            )
+                        )
+                        if exists:
+                            continue
+                        batter = (
+                            event.get("batter") if isinstance(event.get("batter"), dict) else {}
+                        )
+                        session.add(
+                            AtBatEventModel(
+                                game_id=game_id,
+                                source_event_no=source_no,
+                                source_seqno=source_seq,
+                                inning=event.get("inning"),
+                                half=event.get("half"),
+                                batter_id=batter.get("id"),
+                                batter_name=batter.get("name"),
+                                team_code=batter.get("team"),
+                                result=event.get("result") or "other",
+                                result_text=event.get("resultText") or "",
+                                raw_text=event.get("rawText") or "",
+                                runs=event.get("runs"),
+                                rbi=event.get("rbi"),
+                                occurred_at=None,
+                                collected_at=collected_at,
+                                raw=event,
+                            )
+                        )
                 return True
         return False
 

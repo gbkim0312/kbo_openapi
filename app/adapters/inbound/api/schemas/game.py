@@ -34,7 +34,8 @@ class ScoreOut(BaseModel):
     score_updated_at: datetime | None = Field(default=None, alias="scoreUpdatedAt")
     live_fetched_at: datetime | None = Field(default=None, alias="liveFetchedAt")
     live_stale: bool | None = Field(default=None, alias="liveStale")
-    live: "LiveStateOut | None" = None
+    live: LiveStateOut | None = None
+    completed_at_bat: AtBatEventOut | None = Field(default=None, alias="completedAtBat")
 
 
 class PlayerRefOut(BaseModel):
@@ -48,6 +49,29 @@ class PlayerRefOut(BaseModel):
     runs: int | None = None
     walks: int | None = None
     strikeouts: int | None = None
+
+
+class AtBatEventOut(BaseModel):
+    event_id: str = Field(alias="eventId")
+    source_event_no: int = Field(alias="sourceEventNo")
+    source_seqno: int = Field(alias="sourceSeqno")
+    inning: int | None = None
+    half: str | None = None
+    batter: AtBatBatterOut | None = None
+    result: str
+    result_text: str = Field(alias="resultText")
+    raw_text: str = Field(alias="rawText")
+    runs: int | None = None
+    rbi: int | None = None
+    occurred_at: datetime | None = Field(default=None, alias="occurredAt")
+    collected_at: datetime | None = Field(default=None, alias="collectedAt")
+    source: str
+
+
+class AtBatBatterOut(BaseModel):
+    id: str | None = None
+    name: str | None = None
+    team: str | None = None
 
 
 class LiveCountOut(BaseModel):

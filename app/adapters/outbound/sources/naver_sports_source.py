@@ -29,7 +29,7 @@ class NaverSportsSource:
             response = await client.get(url)
             response.raise_for_status()
         payload = response.json()
-        game = ((payload.get("result") or {}).get("game") or {})
+        game = (payload.get("result") or {}).get("game") or {}
         if not isinstance(game, dict) or not game:
             return None
         return self._parse_scoreboard(game)
@@ -45,7 +45,7 @@ class NaverSportsSource:
             response = await client.get(url)
             response.raise_for_status()
         payload = response.json()
-        relay = ((payload.get("result") or {}).get("textRelayData") or {})
+        relay = (payload.get("result") or {}).get("textRelayData") or {}
         if not isinstance(relay, dict):
             return None
         return self._parse_live_state(relay, source_game_id)
@@ -144,7 +144,7 @@ class NaverSportsSource:
 
         inning = NaverSportsSource._parse_inning(relay)
         offense_side = "home" if str(relay.get("homeOrAway") or "0") == "1" else "away"
-        return {
+        parsed = {
             "pitcher": player(state.get("pitcher")),
             "batter": player(state.get("batter")),
             "count": {
@@ -162,6 +162,94 @@ class NaverSportsSource:
             "playSequence": relay.get("no"),
             "inning": inning,
         }
+        parsed["completedAtBats"] = NaverSportsSource._parse_completed_at_bats(
+            relay, source_game_id
+        )
+        return parsed
+
+    @staticmethod
+    def _parse_completed_at_bats(relay: dict, source_game_id: str) -> list[dict[str, object]]:
+        """Normalize result text from Naver's recent relay window.
+
+        Naver does not publish a stable result enum or event timestamp.  We retain
+        the raw Korean text and use ``no`` + ``seqno`` as the deduplication key.
+        """
+        result: list[dict[str, object]] = []
+        relays = relay.get("textRelays")
+        if not isinstance(relays, list):
+            return result
+        for relay_item in relays:
+            if not isinstance(relay_item, dict):
+                continue
+            no = NaverSportsSource._as_int(relay_item.get("no"))
+            inning = relay_item.get("inn")
+            half = "bottom" if str(relay_item.get("homeOrAway") or "0") == "1" else "top"
+            options = relay_item.get("textOptions")
+            if not isinstance(options, list):
+                continue
+            for option in options:
+                if not isinstance(option, dict) or option.get("type") != 13:
+                    continue
+                text = str(option.get("text") or "").strip()
+                # Type 13 contains completed play text (and occasionally review
+                # notices). Only expose a result when a batter/result separator is
+                # present; raw text is still preserved for future parser updates.
+                if ":" not in text:
+                    continue
+                seqno = NaverSportsSource._as_int(option.get("seqno"))
+                if no is None or seqno is None:
+                    continue
+                record = option.get("batterRecord")
+                record = record if isinstance(record, dict) else {}
+                result.append(
+                    {
+                        "eventId": f"{source_game_id}-{no}-{seqno}",
+                        "sourceEventNo": no,
+                        "sourceSeqno": seqno,
+                        "inning": int(inning) if str(inning).isdigit() else None,
+                        "half": half,
+                        "batter": {
+                            "id": str(record["pcode"]) if record.get("pcode") else None,
+                            "name": str(record["name"])
+                            if record.get("name")
+                            else text.split(":", 1)[0].strip(),
+                            "team": source_game_id[8:10]
+                            if half == "top"
+                            else source_game_id[10:12],
+                        },
+                        "result": NaverSportsSource._result_code(text),
+                        "resultText": text.split(":", 1)[1].strip(),
+                        "rawText": text,
+                        "runs": NaverSportsSource._as_int(record.get("run")),
+                        "rbi": NaverSportsSource._as_int(record.get("rbi")),
+                        "occurredAt": None,
+                        "source": "naver-sports",
+                    }
+                )
+        result.sort(key=lambda item: (item["sourceEventNo"], item["sourceSeqno"]))
+        return result
+
+    @staticmethod
+    def _result_code(text: str) -> str:
+        value = text.split(":", 1)[-1]
+        patterns = (
+            ("home_run", ("홈런",)),
+            ("triple", ("3루타",)),
+            ("double", ("2루타",)),
+            ("single", ("안타", "1루타")),
+            ("walk", ("볼넷", "4구")),
+            ("hit_by_pitch", ("사구", "몸에 맞는 볼")),
+            ("strikeout", ("삼진",)),
+            ("double_play", ("병살",)),
+            ("sacrifice", ("희생",)),
+            ("error_reach", ("실책",)),
+            ("groundout", ("땅볼 아웃", "땅볼아웃")),
+            ("flyout", ("뜬공 아웃", "플라이 아웃", "직선타 아웃")),
+        )
+        for code, words in patterns:
+            if any(word in value for word in words):
+                return code
+        return "other"
 
     @staticmethod
     def _parse_inning(relay: dict) -> dict[str, int | str] | None:

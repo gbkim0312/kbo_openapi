@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.adapters.outbound.persistence.models.at_bat_event import AtBatEventModel
 from app.adapters.outbound.persistence.models.base import Base
 from app.adapters.outbound.persistence.models.collection_job import CollectionJobModel
 from app.adapters.outbound.persistence.models.game import GameModel
@@ -16,7 +17,14 @@ if config.config_file_name and config.get_section("loggers"):
     fileConfig(config.config_file_name)
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", "+psycopg"))
 target_metadata = Base.metadata
-MODELS = (TeamModel, GameModel, GameRevisionModel, RawSnapshotModel, CollectionJobModel)
+MODELS = (
+    TeamModel,
+    GameModel,
+    AtBatEventModel,
+    GameRevisionModel,
+    RawSnapshotModel,
+    CollectionJobModel,
+)
 
 
 def run_migrations_offline() -> None:
